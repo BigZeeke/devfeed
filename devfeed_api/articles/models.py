@@ -54,8 +54,9 @@ class Vote(models.Model):
     )
     article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name="votes")
     # Nullable so a user can remove their vote entirely (up -> down -> no
-    # vote) without deleting and recreating the row: one Vote row per
-    # user+article, direction switches or clears in place.
+    # vote) without deleting and recreating the row, per the design we
+    # settled on: one Vote row per user+article, direction switches or
+    # clears in place.
     direction = models.CharField(
         max_length=10, choices=Direction.choices, null=True, blank=True
     )
