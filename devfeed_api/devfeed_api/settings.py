@@ -41,7 +41,13 @@ INSTALLED_APPS = [
     "articles",
     "digests",
     "user_profiles",
+    "rest_framework",
 ]
+
+REST_FRAMEWORK = {
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+}
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
