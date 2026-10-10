@@ -12,3 +12,4 @@ env/
 .env.*
 !.env.example
 devfeed_api/db.sqlite3
+.DS_Store
