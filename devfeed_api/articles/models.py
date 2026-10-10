@@ -44,6 +44,30 @@ class Article(models.Model):
         return self.title
 
 
+class Bookmark(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="bookmarks"
+    )
+    article = models.ForeignKey(
+        Article, on_delete=models.CASCADE, related_name="bookmarks"
+    )
+    note = models.CharField(max_length=500, blank=True, default="")
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "article"], name="unique_user_article_bookmark"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user} saved {self.article}"
+
+
 class Vote(models.Model):
     class Direction(models.TextChoices):
         UP = "up", "Up"
