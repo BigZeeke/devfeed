@@ -6,7 +6,7 @@ Oct 10, 2026 · @Steve Lopez
 
 DevFeed is a personalized developer news digest: it pulls stories from Hacker News, GitHub and curated RSS feeds into one database and serves them through a single API to a React web app. A command-line client on the same API is a stretch goal.
 
-Developers follow news across many sites, each with its own format and noise level. DevFeed collects those sources in one place, lets a user filter by the languages and frameworks they care about, and learns from thumbs up/down votes which articles to rank higher.
+Developers follow news across many sites, each with its own format and noise level. DevFeed collects those sources in one place, lets a user filter by the languages and frameworks they care about, saves articles with personal notes, and learns from thumbs up/down votes which articles to rank higher.
 
 It is my Code Platoon (Cohort Juliett) capstone project. The repository is [github.com/BigZeeke/devfeed](https://github.com/BigZeeke/devfeed).
 
@@ -21,9 +21,9 @@ The MVP is scoped to the Module 9 requirements and roughly 50 hours of build tim
 1. One Django REST Framework API on PostgreSQL as the single source of truth.
 2. Two third-party APIs feeding the database: the Hacker News Algolia API and the GitHub Search API. The GitHub Trending scrape and RSS feeds are extra sources on top of those two.
 3. Sign up, log in and log out with DRF token auth.
-4. Full CRUD from the React UI on two user-owned resources: followed keywords and votes.
+4. Full CRUD from the React UI on two user-owned resources: followed keywords and bookmarks (saved articles with notes).
 5. Tag filtering with server-side autocomplete.
-6. A React + MUI frontend with navigation between the feed, article detail, keywords and login pages.
+6. A React + MUI frontend with navigation between the feed, article detail, saved, keywords and login pages.
 7. The whole stack running in Docker Compose and deployed to AWS EC2, with a first deploy in Week 23.
 8. No secrets in git: settings come from `.env`, documented in a committed `.env.example`.
 9. Every step checked against real Postgres, with backend tests for each endpoint.
@@ -41,7 +41,21 @@ The CLI client, digests, LLM re-ranking and free-text search are stretch goals, 
 
 One Django REST Framework API sits in front of one Postgres database. The web UI goes through that API, as would the stretch-goal CLI; no client talks to the database directly.
 
-&#91;embedded content: DevFeed architecture · 6 components\]
+```mermaid
+flowchart LR
+    external_sources["External sources<br/>Hacker News (Algolia API)<br/>GitHub Trending + Search API<br/>RSS: Real Python, InfoQ"]
+    ingestion_layer["Ingestion layer<br/>One fetcher per source<br/>manage.py ingest_* commands<br/>Dedup on Article.url"]
+    postgres_database[("PostgreSQL<br/>Articles, sources, tags<br/>Votes, digests, keywords<br/>Django auth.User")]
+    web_interface["Web UI<br/>React + Material UI"]
+    cli_client["CLI client (stretch)"]
+    rest_api["Django REST API<br/>CRUD, filters, autocomplete, votes<br/>Token auth for writes<br/>20 items per page"]
+
+    external_sources --> ingestion_layer
+    ingestion_layer -->|writes new articles| postgres_database
+    web_interface --> rest_api
+    cli_client -.-> rest_api
+    rest_api <-->|reads and writes| postgres_database
+```
 
 The old CLI fetchers became the ingestion layer. They fill the database on the backend instead of acting as a user-facing client.
 
@@ -52,12 +66,13 @@ The schema spans three Django apps and Django's built-in `auth.User`; it is migr
 | App | Model | Purpose | Key relationships and constraints |
 | --- | --- | --- | --- |
 | articles | Source | Where an article came from (Hacker News, GitHub, Real Python, InfoQ) | One Source has many Articles |
-| articles | Tag | A language, framework or topic label (React, Django) | Plain ManyToManyField with Article, no extra columns |
-| articles | Article | One story or repository in the feed | FK to Source; M2M to Tag; `url` is unique (the dedup key, enforced in Postgres); `published_at`; `raw_score` from the source; `is_read` is a shared flag, not per user, unused by the MVP |
+| articles | Tag | A language, framework or topic label (React, Django) | Plain ManyToManyField with Article, no extra columns; `label` is unique |
+| articles | Article | One story or repository in the feed | FK to Source; M2M to Tag; `url` is unique (the dedup key, enforced in Postgres); `published_at`; `raw_score` from the source; `is_read` is a shared flag, superseded by the per-user `Bookmark.is_read` |
 | articles | Vote | A user's thumbs up/down on an article | FK to User and Article; unique (user, article); nullable `direction`; `created_at`, `updated_at` |
+| articles | Bookmark | An article a user saved, with a personal note (to build) | FK to User and Article; unique (user, article); `note` up to 500 characters; per-user `is_read`; `created_at`, `updated_at` |
 | digests | Digest | A generated digest of ranked articles | No link to a user (shared, not per user); articles through DigestItem |
-| digests | DigestItem | One article's place in a digest | Through-model with a `rank` field |
-| user\_profiles | UserKeyword | A keyword a user follows | FK to User |
+| digests | DigestItem | One article's place in a digest | Through-model with a `rank` field; unique (digest, article) |
+| user\_profiles | UserKeyword | A keyword a user follows | FK to User; unique (user, keyword); `weight` (unused by the MVP) |
 
 ### Vote design
 
@@ -127,6 +142,8 @@ Implementation: `ModelViewSet` for each model with `select_related`/`prefetch_re
 | POST | `/api/auth/logout/` | Log out; deletes the user's token | Token |
 | GET, POST | `/api/keywords/` | List or add my followed keywords | Token |
 | GET, PUT, PATCH, DELETE | `/api/keywords/{id}/` | Read, edit or delete one of my keywords | Token, owner only |
+| GET, POST | `/api/bookmarks/` | List my saved articles, or save one (body `article`, optional `note`) | Token |
+| GET, PUT, PATCH, DELETE | `/api/bookmarks/{id}/` | Read one bookmark, edit its note or read flag, or remove it | Token, owner only |
 | POST | `/api/articles/{id}/vote/` | Body `{"direction": "up"}` or `"down"`; creates or switches the vote | Token |
 | DELETE | `/api/articles/{id}/vote/` | Removes the vote (sets `direction` to null) | Token |
 | GET | `/api/articles/?tag=django&source=hacker-news` | Filter the feed by tag and source | Public |
@@ -140,7 +157,7 @@ All list endpoints keep `PageNumberPagination` with `PAGE_SIZE` 20.
 
 ## Feature designs
 
-Three features build on the articles API: tag search and filtering, voting, and a GitHub Trending banner. All three reuse existing models.
+Five features build on the articles API: tag search and filtering, voting, a GitHub Trending banner, followed keywords and bookmarks. Keywords and bookmarks are the two resources with full CRUD from the UI. Bookmarks need one new model; everything else reuses existing ones.
 
 ### Tag search and category filtering
 
@@ -203,6 +220,36 @@ GET /api/articles/?mine=true   (login required)
 ```
 
 The keywords page in React lists keywords as MUI `Chip`s with delete buttons, has a `TextField` to add one, and allows renaming a keyword inline. That covers create, read, update and delete in the UI.
+
+### Bookmarks
+
+A logged-in user saves articles to read later, keeps a short personal note on each, and marks them read. This is the second user-facing CRUD resource, and it replaces the shared `Article.is_read` flag with a per-user one. It lives in the `articles` app next to `Vote`, since both pair a user with an article.
+
+```text
+Bookmark   (new model, articles app)
+    user        -> auth_user          many bookmarks per user
+    article     -> articles_article   many bookmarks per article
+    note        text, optional, at most 500 characters
+    is_read     boolean, default false
+    created_at  set when saved
+    updated_at  set on every save
+    unique (user, article)            an article is saved once per user
+
+/api/bookmarks/   (BookmarkViewSet, login required)
+    queryset = Bookmark where user = request.user, newest first   (users only see their own)
+    create:   body article, optional note; user set from request.user
+              reject a second bookmark of the same article by the same user
+    list:     my bookmarks with the article's title, url and source name
+    update:   edit note and is_read; the article cannot be changed
+    destroy:  deletes the row
+```
+
+| CRUD | Where it happens in the UI |
+| --- | --- |
+| Create | Bookmark icon on each article card and on the article detail page |
+| Read | The Saved page: my bookmarked articles, newest first |
+| Update | Edit the note inline (500-character counter) and tick read on the Saved page |
+| Delete | Remove button on the Saved page, or click the filled bookmark icon again |
 
 ### Sign up, log in, log out
 
@@ -268,10 +315,12 @@ MUI's current major version is v9 (9.2.0 per its release tracker as of October 2
 
 | DevFeed feature | MUI components |
 | --- | --- |
-| App shell and navigation | `ThemeProvider`, `CssBaseline`, `AppBar`, `Toolbar`, `Container`; app bar links to Feed, My feed and Keywords; `Drawer` menu on small screens |
+| App shell and navigation | `ThemeProvider`, `CssBaseline`, `AppBar`, `Toolbar`, `Container`; app bar links to Feed, My feed, Saved and Keywords; `Drawer` menu on small screens |
 | Trending banner | Horizontal `Stack` of `Card`s, each with a `Link` to the repo |
 | Article feed | `Grid` of `Card`s: `CardContent`, `Typography`, `Chip` per tag, `CardActions` |
 | Voting | `ToggleButtonGroup` with `ThumbUp` and `ThumbDown` icons; clicking the active button removes the vote |
+| Bookmarking | `IconButton` with `BookmarkBorder` and `Bookmark` icons on each card and the detail page |
+| Saved page | `List` of saved articles; `TextField` to edit the note with a 500-character counter; `Checkbox` for read; delete `IconButton` |
 | Tag search | `Autocomplete` fed by `/api/tags/autocomplete/`, debounced while typing |
 | Source filter | `Select` in the toolbar |
 | Paging | `Pagination` tied to the API's page number |
@@ -294,6 +343,7 @@ devfeed_web/
       articles.js           getArticles, getArticle, voteOnArticle, removeVote
       tags.js               getTagSuggestions
       keywords.js           getKeywords, addKeyword, renameKeyword, deleteKeyword
+      bookmarks.js          getBookmarks, saveBookmark, updateBookmark, removeBookmark
       auth.js               register, requestToken, logout
     context/
       AuthContext.jsx       token, login, logout
@@ -302,12 +352,14 @@ devfeed_web/
       TrendingBanner.jsx
       ArticleCard.jsx
       VoteButtons.jsx
+      BookmarkButton.jsx
       TagSearch.jsx
       AuthDialog.jsx        log in and sign up tabs
     pages/
       FeedPage.jsx
       ArticleDetailPage.jsx
       KeywordsPage.jsx
+      SavedPage.jsx
       DigestPage.jsx        later
 ```
 
@@ -339,9 +391,78 @@ MUI covers what react-chat-elements was meant to provide, so that library is no 
 
 ### Wireframes
 
-These four pages are the wireframes for the proposal. They cover every MVP flow: browse and filter, read and vote, sign up and log in, and manage keywords.
+These five pages are the wireframes for the proposal. They cover every MVP flow: browse and filter, read and vote, sign up and log in, manage keywords, and manage saved articles.
 
-&#91;embedded content: DevFeed wireframes · 4 pages\]
+```text
+FEED (HOME)
++------------------------------------------------------+
+| DevFeed  Feed · My feed · Saved · Keywords · Log in  |
++------------------------------------------------------+
+| [ Trending banner: repo cards, scrolls sideways -> ] |
+| [ Tag search (autocomplete)      ] [ Source v ]      |
+| +-----------------------+ +-----------------------+  |
+| | Article title         | | Article title         |  |
+| | Source, 2h ago        | | Source, 5h ago        |  |
+| | Tags: django, react   | | Tags: rust            |  |
+| | Up / down · Save      | | Up / down · Save      |  |
+| +-----------------------+ +-----------------------+  |
+|            Previous · 1 · 2 · 3 · Next               |
++------------------------------------------------------+
+
+ARTICLE DETAIL
++------------------------------------------------------+
+| DevFeed  Feed · My feed · Saved · Keywords · Log in  |
++------------------------------------------------------+
+| Article title                                        |
+| Hacker News, 3 hours ago                             |
+| Tags: django, postgres                               |
+| Score 42 · Thumbs up / down                          |
+| [ Open original ]   [ Save ]                         |
+|                                                      |
+| Back to feed                                         |
++------------------------------------------------------+
+
+LOG IN / SIGN UP DIALOG
++------------------------------------------------------+
+| DevFeed  Feed · My feed · Saved · Keywords · Log in  |
++------------------------------------------------------+
+|      +------------------------------------+          |
+|      |  [Log in]   Sign up                |          |
+|      |  [ Username                     ]  |          |
+|      |  [ Email (sign up only)         ]  |          |
+|      |  [ Password                     ]  |          |
+|      |  [            Log in            ]  |          |
+|      +------------------------------------+          |
++------------------------------------------------------+
+
+KEYWORDS
++------------------------------------------------------+
+| DevFeed  Feed · My feed · Saved · Keywords · Log out |
++------------------------------------------------------+
+| My keywords                                          |
+| [ New keyword                  ] [ Add ]             |
+| ( django x ) ( postgres x ) ( rust x )               |
+|                                                      |
+| Click a chip to rename it                            |
+| My feed shows articles matching these                |
++------------------------------------------------------+
+
+SAVED
++------------------------------------------------------+
+| DevFeed  Feed · My feed · Saved · Keywords · Log out |
++------------------------------------------------------+
+| Saved articles                                       |
+| +--------------------------------------------------+ |
+| | Article title                                    | |
+| | Note: read before the Django upgrade             | |
+| | [x] Read · Edit note · Remove                    | |
+| +--------------------------------------------------+ |
+| | Article title                                    | |
+| | Add a note (500 characters max)                  | |
+| | [ ] Read · Edit note · Remove                    | |
+| +--------------------------------------------------+ |
++------------------------------------------------------+
+```
 
 The app bar is the same on every page; it shows Log in when signed out and Log out when signed in.
 
@@ -399,7 +520,7 @@ Serving the React bundle and the API from the same origin keeps CORS simple in p
 6. Apply migrations: `docker compose exec backend python manage.py migrate`.
 7. Create an admin user: `docker compose exec backend python manage.py createsuperuser`.
 8. Run each ingest command once and confirm rows in Postgres with `psql` inside the `db` container.
-9. In a browser: sign up, log in, add a keyword, vote, log out.
+9. In a browser: sign up, log in, add a keyword, save an article and edit its note, vote, log out.
 
 ### Scheduled ingestion
 
@@ -418,7 +539,7 @@ No step counts as done until I've checked it against real Postgres. A clean comm
 2. Check writes in the database directly (a `manage.py shell` query or `psql`), not only in the API response. Step 4's `tag_labels` POST was confirmed this way.
 3. Run every ingestion command twice. The second run must create nothing new.
 4. Hit the API with curl or Postman at `http://127.0.0.1:8000`.
-5. Add Django/DRF tests for each endpoint as it's built: filtering, autocomplete limits, vote create/switch/remove, register/login/logout, keyword ownership (one user can't read or change another's keywords), and auth required on protected endpoints.
+5. Add Django/DRF tests for each endpoint as it's built: filtering, autocomplete limits, vote create/switch/remove, register/login/logout, keyword and bookmark ownership (one user can't read or change another's keywords or bookmarks), the 500-character note limit, and auth required on protected endpoints.
 6. Check every web UI flow in production after each deploy, not only on my laptop.
 
 ## Build plan and status
@@ -429,10 +550,10 @@ Steps 1 through 4 of my build checklist are done, which puts the backend ahead o
 | --- | --- | --- |
 | Before Week 22 | Data model, HN ingestion, CRUD API for sources, tags and articles (checklist Steps 1–4) | Done |
 | Week 22 Day 2 | Proposal: MVP, ERD, wireframes and the two APIs from this doc | Fixed date |
-| Week 22 | `ingest_github` command; register, login and logout endpoints; keywords API; voting, filtering and autocomplete endpoints; backend tests | Next |
+| Week 22 | `ingest_github` command; register, login and logout endpoints; keywords API; Bookmark model, migration and API; voting, filtering and autocomplete endpoints; backend tests | Next |
 | Week 23 Days 1–2 | Dockerfiles and Compose running locally; React + MUI shell, auth dialog, feed page | Planned |
 | Week 23 Day 3 | First deploy to EC2, even if unfinished | Planned |
-| Week 23 Day 4 | Keywords page, voting UI, article detail; redeploy | Planned |
+| Week 23 Day 4 | Keywords page, Saved page, voting UI, article detail; redeploy | Planned |
 | Week 24 Days 1–2 | Styling, production bug fixes, redeploy | Planned |
 | Week 24 Day 3 | Final redeploy; README, screenshots, recorded demo backup | Planned |
 | Week 24 Day 4 | Presentation | Fixed date |
@@ -464,7 +585,7 @@ Documentation, git history and the presentation are 35% of the grade together, s
 | Section | Content |
 | --- | --- |
 | What it does | One feed of developer news from Hacker News and GitHub, filtered by the tags and keywords I follow |
-| Live demo | Sign up, filter by tag, vote, add and remove a keyword, log out; recorded backup ready |
+| Live demo | Sign up, filter by tag, vote, add and remove a keyword, save an article and edit its note, log out; recorded backup ready |
 | Tech stack | The architecture diagram from this doc |
 | Hardest problem | Step 4: `localhost` resolving to IPv6, where Docker Desktop was also listening, hid the real server; a stray process also held port 8000. Fixed by always testing at `127.0.0.1` |
 | Another week | CLI client on the same API, then digests built from followed keywords |
