@@ -29,7 +29,7 @@ class Article(models.Model):
         Source, on_delete=models.CASCADE, related_name="articles"
     )
     title = models.CharField(max_length=500, db_index=True)
-    url = models.URLField(max_length=500)
+    url = models.URLField(max_length=500, unique=True)
     published_at = models.DateTimeField(null=True, blank=True, db_index=True)
     raw_score = models.IntegerField(default=0)
     is_read = models.BooleanField(default=False)
@@ -52,7 +52,8 @@ class Vote(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="votes"
     )
-    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name="votes")
+    article = models.ForeignKey(
+        Article, on_delete=models.CASCADE, related_name="votes")
     # Nullable so a user can remove their vote entirely (up -> down -> no
     # vote) without deleting and recreating the row, per the design we
     # settled on: one Vote row per user+article, direction switches or
