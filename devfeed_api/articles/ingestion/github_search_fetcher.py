@@ -26,6 +26,8 @@ from datetime import date, timedelta
 import requests
 
 GITHUB_SEARCH_URL = "https://api.github.com/search/repositories"
+
+# Read once at import time. Empty or missing means unauthenticated requests.
 GITHUB_PERSONAL_ACCESS_TOKEN = os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
 
 
@@ -35,6 +37,7 @@ def _build_request_headers():
     only if one is configured, so this fetcher still works (at the lower
     rate limit) with no token set at all.
     """
+    # GitHub's recommended media type for its REST API responses.
     headers = {"Accept": "application/vnd.github+json"}
     if GITHUB_PERSONAL_ACCESS_TOKEN:
         headers["Authorization"] = f"Bearer {GITHUB_PERSONAL_ACCESS_TOKEN}"
@@ -61,6 +64,8 @@ def fetch_recently_created_repositories(
         owner, repository_name, full_name, repository_url, description,
         programming_language, total_stars, created_at.
     """
+    # GitHub search syntax: "created:>YYYY-MM-DD" limits results to repositories
+    # created after that date; "language:x" narrows by primary language.
     creation_cutoff_date = date.today() - timedelta(days=days_back)
     search_query = f"created:>{creation_cutoff_date.isoformat()}"
     if programming_language:
@@ -69,17 +74,21 @@ def fetch_recently_created_repositories(
     response = requests.get(
         GITHUB_SEARCH_URL,
         params={
-            "q": search_query,
+            "q": search_query,  # "q" is the parameter name GitHub requires
             "sort": "stars",
             "order": "desc",
             "per_page": result_limit,
         },
         headers=_build_request_headers(),
-        timeout=10,
+        timeout=10,  # Fail instead of hanging if GitHub doesn't respond
     )
+    # Raises on 4xx/5xx (including rate-limit rejections) instead of
+    # silently returning an error body as if it were results.
     response.raise_for_status()
     response_data = response.json()
 
+    # Keep only the fields DevFeed uses, under descriptive names, so callers
+    # don't depend on GitHub's raw response structure.
     repositories = []
     for repository_item in response_data.get("items", []):
         repositories.append(
@@ -98,6 +107,8 @@ def fetch_recently_created_repositories(
     return repositories
 
 
+# Standalone smoke test: python github_search_fetcher.py
+# Runs unauthenticated, since .env is only loaded through Django settings.
 if __name__ == "__main__":
     recent_repositories = fetch_recently_created_repositories(days_back=7)
     print(
