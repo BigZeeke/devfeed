@@ -10,8 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import dj_database_url
 from pathlib import Path
 import os
+
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
+
+# Load .env into the enviroment before any setting below reads from it.
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,7 +28,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-md(hoh!k!jxa%&bsu&@tfauplah9wlal-%tq89n#!v3$6i@12!"
+# Read from .env, never hardcoded. Stop at startup if it's missing rather
+# than letting Django run without a signing key.
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        "SECRET_KEY is not set. Add it to .env (see .env.example).")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -82,12 +94,9 @@ WSGI_APPLICATION = "devfeed_api.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-import dj_database_url
-from dotenv import load_dotenv
 
-load_dotenv()
-
-DATABASES = {"default": dj_database_url.config(default=os.getenv("DATABASE_URL"))}
+DATABASES = {"default": dj_database_url.config(
+    default=os.getenv("DATABASE_URL"))}
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
