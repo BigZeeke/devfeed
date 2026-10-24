@@ -44,16 +44,20 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    # Django built-in apps
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # DevFeed apps
     "articles",
     "digests",
     "user_profiles",
+    # Third-party apps
     "rest_framework",
+    "rest_framework.authtoken",  # Token model: one API token per user
 ]
 
 REST_FRAMEWORK = {
