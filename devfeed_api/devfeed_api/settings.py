@@ -61,6 +61,11 @@ INSTALLED_APPS = [
 ]
 
 REST_FRAMEWORK = {
+    # Read "Authorization: Token <key>" headers and set request.user from the token
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+    # List endpoints return 20 results per page
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
 }
