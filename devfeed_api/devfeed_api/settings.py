@@ -65,6 +65,10 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
     ],
+    # Anyone can read; only staff can write, unless a view sets its own permissions explicitly
+    "DEFAULT_PERMISSION_CLASSES": [
+        "articles.permissions.IsStaffOrReadOnly",
+    ],
     # List endpoints return 20 results per page
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
