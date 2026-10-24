@@ -9,5 +9,8 @@ from django.urls import include, path
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Register, token (login), and logout endpoints
+    path('api/auth/', include('user_profiles.urls')),
+    # Sources, tags, and articles
     path('api/', include('articles.urls')),
 ]

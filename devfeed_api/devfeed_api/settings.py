@@ -44,19 +44,32 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    # Django built-in apps
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # DevFeed apps
     "articles",
     "digests",
     "user_profiles",
+    # Third-party apps
     "rest_framework",
+    "rest_framework.authtoken",  # Token model: one API token per user
 ]
 
 REST_FRAMEWORK = {
+    # Read "Authorization: Token <key>" headers and set request.user from the token
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+    # Anyone can read; only staff can write, unless a view sets its own permissions explicitly
+    "DEFAULT_PERMISSION_CLASSES": [
+        "articles.permissions.IsStaffOrReadOnly",
+    ],
+    # List endpoints return 20 results per page
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
 }
