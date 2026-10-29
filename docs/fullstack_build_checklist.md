@@ -50,26 +50,26 @@ My repeatable order for building and testing a full-stack app: build from the da
 3. **Done:** Register routes in urls.py
 4. **Done:** Test every endpoint with `curl` or Postman at `http://127.0.0.1:8000` before touching any client code
 5. **Done:** Confirm GET returns real data from step 3
-6. **Partial:** Confirm POST/PUT/DELETE actually mutate the database (re-check with step 3's query method) (partial: POST and DELETE verified, PUT not yet)
-7. **Partial:** Confirm error cases return sensible status codes (400, 404, etc.) without leaking internals (no raw stack traces or SQL in the response) (partial: duplicate URL returns 400; with `DEBUG` on, a 500 still returns a traceback)
-8. **Partial:** Handle nested/related resources: creating, updating, and deleting nested objects through the API, not just flat single-model CRUD (partial: tags set on create through `tag_labels`; update and delete not verified)
+6. **Done:** Confirm POST/PUT/DELETE actually mutate the database (re-check with step 3's query method) (POST verified with curl and psql; PUT and DELETE covered by tests in `test_article_endpoints.py`)
+7. **Partial:** Confirm error cases return sensible status codes (400, 404, etc.) without leaking internals (no raw stack traces or SQL in the response) (partial: validation errors return 400 and a second DELETE returns 404, both covered by tests; with `DEBUG` on, a 500 still returns a traceback until Step 8)
+8. **Done:** Handle nested/related resources: creating, updating, and deleting nested objects through the API, not just flat single-model CRUD (tags through `tag_labels`: set on create, replaced by PUT, kept by PATCH without it, cleared by an empty list; covered by tests)
 9. **Done:** Keep response shape consistent across endpoints (same field naming, same pagination wrapper) so clients don't need special-case parsing per endpoint
 10. **Done:** Paginate list endpoints from the start, even with a small dataset; it's cheap now and painful to retrofit later
-11. **To do:** Confirm PUT/DELETE are idempotent: calling one twice produces the same end state as calling it once
-12. **Partial:** Validate/sanitize input on the backend even though the frontend also validates; the API is the real gate, not the UI (partial: unique URL enforced)
+11. **Done:** Confirm PUT/DELETE are idempotent: calling one twice produces the same end state as calling it once (covered by tests: a repeated PUT leaves the same state; a second DELETE returns 404 and changes nothing)
+12. **Done:** Validate/sanitize input on the backend even though the frontend also validates; the API is the real gate, not the UI (covered by tests: missing required fields, malformed URL, duplicate URL, unknown source, and tag labels over 100 characters all return 400)
 
 ## 5. Auth
 
 Auth comes before feature endpoints because user-owned resources (votes, keywords) need a logged-in user.
 
-1. **To do:** Use Django's built-in `User` and DRF token auth
-2. **To do:** Sign-up endpoint: validates with Django's password validators, creates the user, returns a token
-3. **To do:** Log-in endpoint: returns a token for valid credentials, 400 otherwise
-4. **To do:** Log-out endpoint: deletes the user's token
-5. **To do:** Confirm protected endpoints reject unauthenticated requests
-6. **To do:** Confirm a valid token grants access and an invalid one doesn't
-7. **To do:** Confirm authenticated ≠ authorized: a regular user's token can't hit staff-only endpoints just because it's valid
-8. **To do:** Lock down data that ingestion owns (for DevFeed: sources, tags, articles) so only staff can write to it
+1. **Done:** Use Django's built-in `User` and DRF token auth (`rest_framework.authtoken`; `TokenAuthentication` is the DRF default)
+2. **Done:** Sign-up endpoint: validates with Django's password validators, creates the user, returns a token (`/api/auth/register/`; covered by tests, including weak password and duplicate username)
+3. **Done:** Log-in endpoint: returns a token for valid credentials, 400 otherwise (`/api/auth/token/`; covered by tests)
+4. **Done:** Log-out endpoint: deletes the user's token (`/api/auth/logout/`, returns 204; covered by tests, including that a deleted token can't be reused)
+5. **Done:** Confirm protected endpoints reject unauthenticated requests (anonymous writes return 401; covered by tests)
+6. **Done:** Confirm a valid token grants access and an invalid one doesn't (covered by tests; an invalid token is rejected even for reads)
+7. **Done:** Confirm authenticated ≠ authorized: a regular user's token can't hit staff-only endpoints just because it's valid (regular users get 403 on writes; covered by tests)
+8. **Done:** Lock down data that ingestion owns (for DevFeed: sources, tags, articles) so only staff can write to it (`IsStaffOrReadOnly` is the default permission class)
 
 ## 6. User-Owned Resources & Feature Endpoints
 
@@ -82,11 +82,11 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 
 ## 7. Automated Tests for the API
 
-1. **To do:** Write tests for each endpoint (happy path + at least one failure case)
-2. **To do:** Include tests for sign-up/log-in/log-out, ownership (one user can't read or change another's rows), feature endpoints, and auth-protected routes
-3. **To do:** Assert on what the API returns (behavior), not on internal method calls, so refactoring doesn't break tests unnecessarily
-4. **Done:** Run the test suite and confirm everything passes (23 ingestion tests so far; API tests pending)
-5. **Done:** Deliberately break something (typo a field name, change a status code) and confirm a test catches it (done on ingestion code; repeat once API tests exist)
+1. **Partial:** Write tests for each endpoint (happy path + at least one failure case) (partial: articles and the auth endpoints covered; sources and tags only through the permission tests; keyword and bookmark endpoints come with Step 6)
+2. **Partial:** Include tests for sign-up/log-in/log-out, ownership (one user can't read or change another's rows), feature endpoints, and auth-protected routes (partial: sign-up/log-in/log-out and auth-protected routes covered; ownership and feature endpoints come with Step 6)
+3. **Done:** Assert on what the API returns (behavior), not on internal method calls, so refactoring doesn't break tests unnecessarily (API tests check status codes, response data and database state)
+4. **Done:** Run the test suite and confirm everything passes (52 tests pass on `main`: 23 ingestion, 7 permissions, 10 auth, 12 article endpoints)
+5. **Done:** Deliberately break something (typo a field name, change a status code) and confirm a test catches it (done on ingestion code and on each API test file in PR #26)
 6. **Done:** Fix the deliberate break, confirm tests pass again
 
 ## 8. Environment Config, CORS & Reverse Proxy
