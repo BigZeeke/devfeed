@@ -2,17 +2,19 @@
 
 My repeatable order for building and testing a full-stack app: build from the data outward, and don't move to the next layer until the current one is verified, not just written. Deploy early: a working skeleton on the real server beats a finished app that only runs on my laptop.
 
-## DevFeed status (as of Oct 17, 2026)
+## DevFeed status (as of Oct 29, 2026)
 
 1. Steps 1–3: done and verified on real Postgres. Both required third-party APIs are integrated as management commands (`ingest_hacker_news`, `ingest_github`), each verified idempotent.
-2. Step 4: CRUD API for sources, tags and articles is done. Still open: no internals leaking on errors (`DEBUG` is on), nested update/delete, PUT and DELETE idempotency, and input validation beyond the unique URL.
+2. Step 4: CRUD API for sources, tags and articles is done, with PUT mutation, PUT/DELETE idempotency, nested tag updates and input validation covered by tests. Still open: with `DEBUG` on, a 500 still returns a traceback (fixed when `DEBUG` moves to `.env` in Step 8).
 3. Second full-CRUD resource changed from votes to bookmarks (new Bookmark model: saved articles with a note and a per-user read flag) after instructor review. Votes stay as a feature.
-4. Step 7 started early: 23 automated tests cover both ingestion commands and both fetchers, all network calls mocked. API endpoint tests come with auth.
-5. Step 8 started early: `SECRET_KEY` moved to `.env` and rotated, with a startup check. `DEBUG` and `ALLOWED_HOSTS` are still hardcoded.
-6. Next: Step 5 (auth). Steps 6 and 9–17 not started. First deploy (step 11) targeted for Week 23 Day 3. Presentation Week 24 Day 4.
-7. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories; decide on filtering before the presentation.
+4. Step 5: done (PR #26). DRF token auth with register, log-in (token) and log-out endpoints. Sources, tags and articles are readable by anyone and writable only by staff.
+5. Step 7 in progress: 52 automated tests pass (23 ingestion, 7 permissions, 10 auth, 12 article endpoints). Ownership and feature-endpoint tests come with Step 6.
+6. Step 8 started early: `SECRET_KEY` moved to `.env` and rotated, with a startup check. `DEBUG` and `ALLOWED_HOSTS` are still hardcoded.
+7. Next: Step 6 (keywords and bookmarks endpoints). Steps 9–17 not started. First deploy (step 11) targeted for Week 23 Day 3. Presentation Week 24 Day 4.
+8. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories; decide on filtering before the presentation.
 
 ## 1. Proposal & ERD
+
 1. **Done:** Diagram entities, attributes, and relationships in drawdb.app (cardinality: one-to-many, many-to-many, etc.)
 2. **To do:** Justify normalization decisions (e.g., why a join table exists instead of a flat text field)
 3. **Done:** Mark primary keys, foreign keys, and any indexes worth adding upfront, especially fields I'll filter, sort, or search on
@@ -25,6 +27,7 @@ My repeatable order for building and testing a full-stack app: build from the da
 10. **Done:** Submit the proposal
 
 ## 2. Data Model
+
 1. **Done:** Translate the ERD into models (fields, types, relationships)
 2. **Done:** Run migrations
 3. **Done:** Open a shell and manually create/query one row per model
@@ -32,6 +35,7 @@ My repeatable order for building and testing a full-stack app: build from the da
 5. **Done:** Cross-check the migration output (`python manage.py sqlmigrate`, or inspect the schema directly) against the ERD to confirm what got built matches what I designed
 
 ## 3. Data Population (Ingestion or Seed Data)
+
 1. **Done:** Write a script, management command, or fixture to load real or realistic data
 2. **Done:** Wrap each required third-party API in its own management command, so both are integrated, not just tested standalone
 3. **Done:** Run each command once
@@ -40,6 +44,7 @@ My repeatable order for building and testing a full-stack app: build from the da
 6. **Done:** Run each command a second time and confirm it creates no duplicates (idempotent)
 
 ## 4. Backend API (CRUD)
+
 1. **Done:** Write serializers for each model
 2. **Done:** Write viewsets/routes for GET, POST, PUT/PATCH, DELETE
 3. **Done:** Register routes in urls.py
@@ -54,7 +59,9 @@ My repeatable order for building and testing a full-stack app: build from the da
 12. **Partial:** Validate/sanitize input on the backend even though the frontend also validates; the API is the real gate, not the UI (partial: unique URL enforced)
 
 ## 5. Auth
+
 Auth comes before feature endpoints because user-owned resources (votes, keywords) need a logged-in user.
+
 1. **To do:** Use Django's built-in `User` and DRF token auth
 2. **To do:** Sign-up endpoint: validates with Django's password validators, creates the user, returns a token
 3. **To do:** Log-in endpoint: returns a token for valid credentials, 400 otherwise
@@ -65,6 +72,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 8. **To do:** Lock down data that ingestion owns (for DevFeed: sources, tags, articles) so only staff can write to it
 
 ## 6. User-Owned Resources & Feature Endpoints
+
 1. **To do:** Full CRUD on each user-owned resource, scoped so users only see and change their own rows (for DevFeed: keywords and bookmarks)
 2. **To do:** Set the owner from `request.user` on create; never trust an owner id from the request body
 3. **To do:** Design non-CRUD endpoints as parameterized from the start (e.g., a `fields` param on search) so adding scope later doesn't require reworking the endpoint
@@ -73,6 +81,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 6. **To do:** Note any feature that implies a future ML/re-ranking layer (e.g., vote-driven ranking) as a stretch goal, not part of this pass
 
 ## 7. Automated Tests for the API
+
 1. **To do:** Write tests for each endpoint (happy path + at least one failure case)
 2. **To do:** Include tests for sign-up/log-in/log-out, ownership (one user can't read or change another's rows), feature endpoints, and auth-protected routes
 3. **To do:** Assert on what the API returns (behavior), not on internal method calls, so refactoring doesn't break tests unnecessarily
@@ -81,6 +90,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 6. **Done:** Fix the deliberate break, confirm tests pass again
 
 ## 8. Environment Config, CORS & Reverse Proxy
+
 1. **Partial:** Move every secret and setting into `.env` (`SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `DATABASE_URL`, `POSTGRES_*`, `CORS_ALLOWED_ORIGINS`, API tokens), never hardcoded (partial: `SECRET_KEY`, `DATABASE_URL`, GitHub token done; `DEBUG` and `ALLOWED_HOSTS` still hardcoded)
 2. **Done:** Commit a `.env.example` listing every variable with placeholder values; confirm `.env` is in `.gitignore`
 3. **Partial:** Search the git history for committed secrets; if any turn up, rotate them, don't just delete the line (partial: committed `SECRET_KEY` found and rotated; full history search not yet run)
@@ -89,6 +99,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 6. **To do:** Remember `VITE_API_URL` is baked in at `npm run build`, not read at runtime
 
 ## 9. Containerize (Docker)
+
 1. **To do:** Write a Dockerfile for the backend (Gunicorn) and a multi-stage one for the frontend (Node build, then NGINX)
 2. **To do:** Add a `.dockerignore` to each so `node_modules`, virtual environments and `.env` never end up in an image
 3. **To do:** Write a `docker-compose.yml` with `db` (Postgres with a named volume and a real user/password), `backend` and `frontend`
@@ -97,6 +108,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 6. **To do:** Re-run the step 4–7 checks against the containerized version
 
 ## 10. React Frontend: Shell and Core Flow
+
 1. **To do:** Set up the React project with Vite and Material UI (`@mui/material`, `@mui/icons-material`)
 2. **To do:** One MUI theme (palette, typography, dark mode) instead of scattered CSS
 3. **To do:** Add routing (React Router) and an app bar with navigation between every page
@@ -106,6 +118,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 7. **To do:** Get one core flow working end to end against the real API (for DevFeed: the paginated feed)
 
 ## 11. First Deploy (Walking Skeleton)
+
 1. **To do:** Set a $10 monthly AWS budget alert before launching anything
 2. **To do:** Launch the EC2 instance; security group allows SSH from my IP only and HTTP from anywhere
 3. **To do:** Install Docker and the Compose plugin
@@ -116,6 +129,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 8. **To do:** Ship it even if it's unfinished and ugly; production surprises (CORS, env vars, migrations) are cheaper to find now
 
 ## 12. React Feature Completion
+
 1. **To do:** Build out full CRUD in the UI for each user-owned resource (list, create, edit, delete)
 2. **To do:** Build the autocomplete search bar (debounced input, calls the endpoint from step 6)
 3. **To do:** Build the voting UI (thumbs up/down, reflects the current vote per article)
@@ -124,6 +138,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 6. **To do:** Redeploy after each feature lands, not all at the end
 
 ## 13. Production Hardening & Regression Pass
+
 1. **To do:** Schedule ingestion on the server (cron calling the management commands)
 2. **To do:** Re-run the step 4–7 checks against the deployed URL
 3. **To do:** Click through every user flow in production, not only locally
@@ -132,6 +147,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 6. **To do:** Re-run the full automated test suite one more time before calling it done
 
 ## 14. Code Quality / Refactor Pass
+
 1. **To do:** Check for N+1 query problems (looping over a queryset and hitting the DB per iteration); fix with `select_related`/`prefetch_related`
 2. **To do:** Look for duplicated fetch/error-handling logic in the frontend that could live in one API module
 3. **To do:** Confirm views stay thin: business logic lives in models/serializers/services, not sprawling across view functions
@@ -140,6 +156,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 6. **To do:** Re-run the full test suite after any refactor to confirm behavior didn't change, only structure
 
 ## 15. Documentation & Presentation
+
 1. **To do:** README: what the app does and the problem it solves, screenshots or a demo GIF, live link, setup steps someone can follow from `git clone`, technologies used, ERD
 2. **To do:** Confirm the setup steps work from a fresh clone
 3. **To do:** Record a backup demo walkthrough before presentation day
@@ -147,22 +164,26 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 5. **To do:** Add the project to my LinkedIn and GitHub profile README once it's deployed
 
 ## 16. CI/CD (Optional, Exceeds Expectations)
+
 1. **To do:** Set up GitHub Actions to run the backend test suite on every push/PR
 2. **To do:** Add branch protection so merges require passing tests
 3. **To do:** Set up continuous deployment so a merge to main triggers a deploy
 
 ## 17. Frontend E2E Tests (Optional)
+
 1. **To do:** Write Playwright tests covering the core user flows (view list, create, edit, delete, search, vote)
 2. **To do:** Include a test for the auth flow (sign up, log in, protected route redirect, log out)
 3. **To do:** Run the suite against a real running backend, not a mock
 
 ## The Rules to Remember
+
 1. **Verify against the layer below.** At every step, I check against the database, not just "the screen looked right," and I don't start the next layer until the current one is confirmed working. This holds through deployment: a container isn't "done" until it behaves the same as my tested local version, and a deployment isn't "done" until I've re-run my checks against the live URL.
 2. **Deploy early, then keep deploying.** The first deploy happens once there's a working skeleton, not at the end. Every feature after that gets redeployed and checked in production.
 3. **Watch for DRY, efficiency, and scope creep as I go, not just at the end.** Before marking any step done, I ask: did I duplicate logic I already wrote, is this the right query for the data size, and did I build only what this step needs? Step 14 is for what's hard to catch in the moment (N+1 queries, duplication), not a substitute for catching the obvious stuff early.
 4. **Small commits, one PR per issue.** Clear commit messages throughout. Each PR description notes whether any code was materially AI-generated, and I can walk through every line I ship.
 
 ## Optional Next Steps (once the above is solid)
+
 - **Second client (CLI):** a thin command-line client against the same API. Build it after the web MVP is deployed, then do a cross-client regression pass: change data in one client, confirm it shows in the other, and repeat in the opposite direction.
 - **Raw HTML/CSS/JS checkpoint:** a single plain page with `fetch()` calls, as proof the API works from a browser with no framework. Useful for learning; skipped when the hour budget is tight.
 - **GraphQL:** a single endpoint where the client asks for exactly the fields it wants, instead of many fixed-shape REST endpoints. Worth exploring as a stretch add-on once REST is solid.
