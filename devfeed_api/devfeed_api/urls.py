@@ -13,4 +13,6 @@ urlpatterns = [
     path('api/auth/', include('user_profiles.urls')),
     # Sources, tags, and articles
     path('api/', include('articles.urls')),
+    # Followed keywords for the logged-in user
+    path('api/', include('user_profiles.keyword_urls')),
 ]

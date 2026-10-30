@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from articles.models import Article, Source, Tag
+from articles.models import Article, Bookmark, Source, Tag
 
 
 class SourceSerializer(serializers.ModelSerializer):
@@ -72,3 +72,29 @@ class ArticleSerializer(serializers.ModelSerializer):
             tag, _ = Tag.objects.get_or_create(label=label)
             tags.append(tag)
         article.tags.set(tags)
+
+
+class BookmarkSerializer(serializers.ModelSerializer):
+    # The owner always comes from the logged-in user, never from the request
+    # body. HiddenField keeps "user" out of the input and the output, but DRF
+    # still sees it during validation, so the unique user+article constraint
+    # is checked here and a duplicate returns 400 instead of a database 500.
+    user = serializers.HiddenField(default=serializers.CurrentUserDefault())
+
+    # Read-only convenience field so a saved-articles list can show titles
+    # without a second request per bookmark.
+    article_title = serializers.CharField(source="article.title", read_only=True)
+
+    class Meta:
+        model = Bookmark
+        fields = [
+            "id",
+            "user",
+            "article",
+            "article_title",
+            "note",
+            "is_read",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
