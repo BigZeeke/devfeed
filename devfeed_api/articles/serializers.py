@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from articles.models import Article, Bookmark, Source, Tag
+from articles.models import Article, Bookmark, Source, Tag, Vote
 
 
 class SourceSerializer(serializers.ModelSerializer):
@@ -98,3 +98,11 @@ class BookmarkSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
+
+
+class VoteSerializer(serializers.Serializer):
+    """Validates the body of a vote request: "up", "down", or null to clear the vote."""
+
+    # Required, so a missing direction is a 400 rather than a silent clear;
+    # allow_null is what lets a client send null on purpose to clear their vote.
+    direction = serializers.ChoiceField(choices=Vote.Direction.choices, allow_null=True)
