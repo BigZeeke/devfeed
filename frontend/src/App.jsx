@@ -1,120 +1,70 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+/**
+ * App layout: the top app bar with navigation, plus the page routes.
+ *
+ * Every page renders inside the same Container below the app bar,
+ * so spacing and width stay consistent across the app.
+ */
+import { NavLink, Route, Routes } from 'react-router'
+import AppBar from '@mui/material/AppBar'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Container from '@mui/material/Container'
+import Toolbar from '@mui/material/Toolbar'
+import Typography from '@mui/material/Typography'
+import DynamicFeedIcon from '@mui/icons-material/DynamicFeed'
+
+import AboutPage from './pages/AboutPage.jsx'
+import NotFoundPage from './pages/NotFoundPage.jsx'
+
+// Pages shown as buttons in the app bar, in display order.
+const navigationLinks = [
+  { label: 'Feed', path: '/' },
+  { label: 'About', path: '/about' },
+]
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      <AppBar position="sticky">
+        <Toolbar>
+          <DynamicFeedIcon sx={{ marginRight: 1 }} />
+          <Typography
+            variant="h6"
+            component={NavLink}
+            to="/"
+            sx={{ color: 'inherit', textDecoration: 'none', flexGrow: 1 }}
+          >
+            DevFeed
+          </Typography>
 
-      <div className="ticks"></div>
+          <Box component="nav" sx={{ display: 'flex', gap: 1 }}>
+            {navigationLinks.map((navigationLink) => (
+              <Button
+                key={navigationLink.path}
+                component={NavLink}
+                to={navigationLink.path}
+                // "end" makes "/" active only on the feed itself, not on every page.
+                end
+                color="inherit"
+                // NavLink adds the "active" class to the link for the current page.
+                sx={{ '&.active': { textDecoration: 'underline', textUnderlineOffset: 6 } }}
+              >
+                {navigationLink.label}
+              </Button>
+            ))}
+          </Box>
+        </Toolbar>
+      </AppBar>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+      <Container component="main" maxWidth="md" sx={{ paddingY: 3 }}>
+        <Routes>
+          {/* Temporary placeholder until the feed page is added in the next commit */}
+          <Route path="/" element={<Typography>The article feed comes next.</Typography>} />
+          <Route path="/about" element={<AboutPage />} />
+          {/* Any other path shows the not-found page */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Container>
     </>
   )
 }
