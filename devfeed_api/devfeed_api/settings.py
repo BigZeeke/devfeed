@@ -36,9 +36,17 @@ if not SECRET_KEY:
         "SECRET_KEY is not set. Add it to .env (see .env.example).")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Read from .env. Defaults to False so a missing value fails safe; only the
+# text "true" (any letter case) turns debug on.
+DEBUG = os.getenv("DEBUG", "False").strip().lower() == "true"
 
-ALLOWED_HOSTS = []
+# Comma-separated host names from .env, e.g. "127.0.0.1,localhost".
+# Blank entries are dropped so a trailing comma doesn't add an empty host.
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv("ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
 
 
 # Application definition
