@@ -11,9 +11,11 @@ My repeatable order for building and testing a full-stack app: build from the da
 5. Step 6: done. Owner-scoped full CRUD on keywords and bookmarks (PR #30), article voting (PR #32), and search autocomplete on tags, parameterized through a `field` param (PR #34).
 6. Step 7 in progress: 102 automated tests pass (23 ingestion, 7 permissions, 10 auth, 12 article endpoints, 11 bookmarks, 11 keywords, 10 votes, 10 search, 8 environment config). Sources and tags are still covered only through the permission tests.
 7. Step 8: items 1–4 done (PR #38). `DEBUG`, `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` now come from `.env`; the full git-history secret search found no live secrets (results on issue #37); `django-cors-headers` allows the React dev server origins. Items 5–6 (NGINX layout, `VITE_API_URL`) stay open under issue #13 for the Docker and deploy steps.
-8. Step 9: backend half done (PR #42, issue #41). Backend Dockerfile (Gunicorn, non-root user), `.dockerignore`, and `docker-compose.yml` with `db` (Postgres 18, named volume, no published port) and `backend` (published at `127.0.0.1:8001`). Migrations, the full test suite, and the curl and `psql` checks all pass against the containers. The frontend Dockerfile and `frontend` service stay open under issue #15 until the React shell exists.
-9. Next: the React shell (Step 10), then the first deploy (Step 11, targeted for Week 23 Day 3). Steps 10–17 not started. Presentation Week 24 Day 4.
-10. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories; decide on filtering before the presentation.
+8. Step 9: backend half done (PR #42, issue #41). Backend Dockerfile (Gunicorn, non-root user), `.dockerignore`, and `docker-compose.yml` with `db` (Postgres 18, named volume, no published port) and `backend` (published at `127.0.0.1:8001`). Migrations, the full test suite, and the curl and `psql` checks all pass against the containers. The frontend Dockerfile and `frontend` service stay open under issue #15; now that the React shell exists, they come next.
+9. Step 10: items 1–4 and 7 done (PR #46, issue #45). Vite + React + Material UI app in `frontend/` with one theme (light and dark palettes), React Router with an app bar, and the paginated article feed against the real API, checked against `psql`. Items 5–6 (auth in the UI, Context) stay open under issue #10.
+10. Next: auth in the UI (Step 10 items 5–6), then the frontend Dockerfile and `frontend` service (issue #15), then the first deploy (Step 11, targeted for Week 23 Day 3). Steps 11–17 not started. Presentation Week 24 Day 4.
+11. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories (one showed on page 1 of the feed while testing PR #46); decide on filtering before the presentation.
+12. Known issue: the article list orders by `-published_at` with no tie-breaker, and one timestamp is shared locally, so equal-time articles could shift between pages. Add `-id` to the ordering, with a test, in a small backend issue.
 
 ## 1. Proposal & ERD
 
@@ -98,26 +100,26 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 3. **Done:** Search the git history for committed secrets; if any turn up, rotate them, don't just delete the line (full search of every commit on Oct 31 found no live secrets; the only committed secret was the old `SECRET_KEY`, already rotated; results on issue #37)
 4. **Done:** Configure `django-cors-headers` so the React dev server (a different origin) can call the API (`CORS_ALLOWED_ORIGINS` from `.env`, `CorsMiddleware` first; checked with curl and covered by tests, PR #38)
 5. **To do:** Plan the production layout: NGINX serves the React build and proxies `/api/` to the backend, so both share one origin
-6. **To do:** Remember `VITE_API_URL` is baked in at `npm run build`, not read at runtime
+6. **Partial:** Remember `VITE_API_URL` is baked in at `npm run build`, not read at runtime (partial: `frontend/src/api.js` reads it, falling back to `http://127.0.0.1:8000` in dev and the same origin in a production build, PR #46; setting it in the frontend Docker build comes with issue #15)
 
 ## 9. Containerize (Docker)
 
-1. **Partial:** Write a Dockerfile for the backend (Gunicorn) and a multi-stage one for the frontend (Node build, then NGINX) (partial: backend Dockerfile done in PR #42, `python:3.14-slim`, Gunicorn with 3 workers, non-root user; the frontend one waits for the React shell)
-2. **Partial:** Add a `.dockerignore` to each so `node_modules`, virtual environments and `.env` never end up in an image (partial: backend `.dockerignore` done in PR #42, image checked to hold only project code; the frontend one waits for the React shell)
-3. **Partial:** Write a `docker-compose.yml` with `db` (Postgres with a named volume and a real user/password), `backend` and `frontend` (partial: `db` and `backend` done in PR #42; `db` uses Postgres 18 with the volume at `/var/lib/postgresql` and no published port; `backend` is published at `127.0.0.1:8001` because host port 8000 is taken; `frontend` waits for the React shell)
-4. **Partial:** Build and run locally with Docker; confirm it behaves the same as my non-Docker local setup (partial: backend and database behave the same through curl at `127.0.0.1:8001`, and data survives `docker compose down` and up, PR #42; the frontend comes later)
+1. **Partial:** Write a Dockerfile for the backend (Gunicorn) and a multi-stage one for the frontend (Node build, then NGINX) (partial: backend Dockerfile done in PR #42, `python:3.14-slim`, Gunicorn with 3 workers, non-root user; the frontend one is next under issue #15)
+2. **Partial:** Add a `.dockerignore` to each so `node_modules`, virtual environments and `.env` never end up in an image (partial: backend `.dockerignore` done in PR #42, image checked to hold only project code; the frontend one is next under issue #15)
+3. **Partial:** Write a `docker-compose.yml` with `db` (Postgres with a named volume and a real user/password), `backend` and `frontend` (partial: `db` and `backend` done in PR #42; `db` uses Postgres 18 with the volume at `/var/lib/postgresql` and no published port; `backend` is published at `127.0.0.1:8001` because host port 8000 is taken; `frontend` is next under issue #15)
+4. **Partial:** Build and run locally with Docker; confirm it behaves the same as my non-Docker local setup (partial: backend and database behave the same through curl at `127.0.0.1:8001`, and data survives `docker compose down` and up, PR #42; the frontend is next under issue #15)
 5. **Done:** Run migrations inside the container (`docker compose exec backend python manage.py migrate`); don't assume they carry over (27 migrations applied and 20 tables created, checked with `psql` in the `db` container, PR #42)
 6. **Done:** Re-run the step 4–7 checks against the containerized version (102 tests pass inside the container on Postgres 18; curl checks for reads, unlisted `Host`, and CORS; register, token, and keyword create land in the container database, checked with `psql`; PR #42)
 
 ## 10. React Frontend: Shell and Core Flow
 
-1. **To do:** Set up the React project with Vite and Material UI (`@mui/material`, `@mui/icons-material`)
-2. **To do:** One MUI theme (palette, typography, dark mode) instead of scattered CSS
-3. **To do:** Add routing (React Router) and an app bar with navigation between every page
-4. **To do:** Fetch from the API with loading and error states (TanStack Query or `useEffect`)
-5. **To do:** Sign-up, log-in and log-out in the UI; store the token, send it on requests, handle a 401
-6. **To do:** Share the logged-in user through Context
-7. **To do:** Get one core flow working end to end against the real API (for DevFeed: the paginated feed)
+1. **Done:** Set up the React project with Vite and Material UI (`@mui/material`, `@mui/icons-material`) (`create-vite` 9.3.3 React template in JavaScript, Vite 8.3.5, MUI 9.5.0, Roboto bundled through `@fontsource/roboto`; PR #46)
+2. **Done:** One MUI theme (palette, typography, dark mode) instead of scattered CSS (`frontend/src/theme.js`: light and dark palettes chosen by the browser's `prefers-color-scheme`; the template CSS was removed in favor of `CssBaseline`; no manual toggle yet; PR #46)
+3. **Done:** Add routing (React Router) and an app bar with navigation between every page (React Router 8.5.1 with `BrowserRouter`; Feed and About links with the current page underlined; catch-all 404 page; PR #46)
+4. **Done:** Fetch from the API with loading and error states (TanStack Query or `useEffect`) (`useEffect` with an `AbortController` in `FeedPage.jsx`; spinner, error and empty-state alerts; base URL and error handling live in `api.js`; PR #46)
+5. **To do:** Sign-up, log-in and log-out in the UI; store the token, send it on requests, handle a 401 (issue #10)
+6. **To do:** Share the logged-in user through Context (issue #10)
+7. **Done:** Get one core flow working end to end against the real API (for DevFeed: the paginated feed) (20 articles per page with MUI `Pagination` synced to `?page=`; the first three cards and the page sizes of 20, 20 and 10 matched `psql` on local Postgres; PR #46)
 
 ## 11. First Deploy (Walking Skeleton)
 
