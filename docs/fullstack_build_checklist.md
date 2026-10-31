@@ -2,16 +2,17 @@
 
 My repeatable order for building and testing a full-stack app: build from the data outward, and don't move to the next layer until the current one is verified, not just written. Deploy early: a working skeleton on the real server beats a finished app that only runs on my laptop.
 
-## DevFeed status (as of Oct 29, 2026)
+## DevFeed status (as of Oct 31, 2026)
 
 1. Steps 1–3: done and verified on real Postgres. Both required third-party APIs are integrated as management commands (`ingest_hacker_news`, `ingest_github`), each verified idempotent.
 2. Step 4: CRUD API for sources, tags and articles is done, with PUT mutation, PUT/DELETE idempotency, nested tag updates and input validation covered by tests. Still open: with `DEBUG` on, a 500 still returns a traceback (fixed when `DEBUG` moves to `.env` in Step 8).
 3. Second full-CRUD resource changed from votes to bookmarks (new Bookmark model: saved articles with a note and a per-user read flag) after instructor review. Votes stay as a feature.
 4. Step 5: done (PR #26). DRF token auth with register, log-in (token) and log-out endpoints. Sources, tags and articles are readable by anyone and writable only by staff.
-5. Step 7 in progress: 52 automated tests pass (23 ingestion, 7 permissions, 10 auth, 12 article endpoints). Ownership and feature-endpoint tests come with Step 6.
-6. Step 8 started early: `SECRET_KEY` moved to `.env` and rotated, with a startup check. `DEBUG` and `ALLOWED_HOSTS` are still hardcoded.
-7. Next: Step 6 (keywords and bookmarks endpoints). Steps 9–17 not started. First deploy (step 11) targeted for Week 23 Day 3. Presentation Week 24 Day 4.
-8. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories; decide on filtering before the presentation.
+5. Step 6: done. Owner-scoped full CRUD on keywords and bookmarks (PR #30), article voting (PR #32), and search autocomplete on tags, parameterized through a `field` param (PR #34).
+6. Step 7 in progress: 94 automated tests pass (23 ingestion, 7 permissions, 10 auth, 12 article endpoints, 11 bookmarks, 11 keywords, 10 votes, 10 search). Sources and tags are still covered only through the permission tests.
+7. Step 8 started early: `SECRET_KEY` moved to `.env` and rotated, with a startup check. `DEBUG` and `ALLOWED_HOSTS` are still hardcoded.
+8. Next: Step 8 (`DEBUG` and `ALLOWED_HOSTS` to `.env`, full git-history secret search, `django-cors-headers`), then Docker and the React shell. Steps 9–17 not started. First deploy (step 11) targeted for Week 23 Day 3. Presentation Week 24 Day 4.
+9. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories; decide on filtering before the presentation.
 
 ## 1. Proposal & ERD
 
@@ -73,20 +74,20 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 
 ## 6. User-Owned Resources & Feature Endpoints
 
-1. **To do:** Full CRUD on each user-owned resource, scoped so users only see and change their own rows (for DevFeed: keywords and bookmarks)
-2. **To do:** Set the owner from `request.user` on create; never trust an owner id from the request body
-3. **To do:** Design non-CRUD endpoints as parameterized from the start (e.g., a `fields` param on search) so adding scope later doesn't require reworking the endpoint
-4. **To do:** Build the narrowest working version first (e.g., autocomplete on tags only, a simple up/down vote counter) before expanding scope
-5. **To do:** Confirm each endpoint composes cleanly with pagination and response-shape conventions from step 4
-6. **To do:** Note any feature that implies a future ML/re-ranking layer (e.g., vote-driven ranking) as a stretch goal, not part of this pass
+1. **Done:** Full CRUD on each user-owned resource, scoped so users only see and change their own rows (for DevFeed: keywords and bookmarks) (`/api/keywords/` and `/api/bookmarks/`, PR #30; another user's row returns 404; covered by tests)
+2. **Done:** Set the owner from `request.user` on create; never trust an owner id from the request body (`HiddenField(CurrentUserDefault())` on both serializers, PR #30)
+3. **Done:** Design non-CRUD endpoints as parameterized from the start (e.g., a `fields` param on search) so adding scope later doesn't require reworking the endpoint (`/api/search/autocomplete/` takes a `field` param backed by a lookup table, so a new field only adds an entry; PR #34)
+4. **Done:** Build the narrowest working version first (e.g., autocomplete on tags only, a simple up/down vote counter) before expanding scope (search supports tags only, PR #34; voting is an up/down counter with one row per user and article, PR #32)
+5. **Done:** Confirm each endpoint composes cleanly with pagination and response-shape conventions from step 4 (keyword, bookmark and search lists use the default pagination wrapper; search returns the same shape as `/api/tags/`, covered by tests)
+6. **Done:** Note any feature that implies a future ML/re-ranking layer (e.g., vote-driven ranking) as a stretch goal, not part of this pass (vote-driven ranking is listed under Optional Next Steps; votes aren't used in ranking yet)
 
 ## 7. Automated Tests for the API
 
-1. **Partial:** Write tests for each endpoint (happy path + at least one failure case) (partial: articles and the auth endpoints covered; sources and tags only through the permission tests; keyword and bookmark endpoints come with Step 6)
-2. **Partial:** Include tests for sign-up/log-in/log-out, ownership (one user can't read or change another's rows), feature endpoints, and auth-protected routes (partial: sign-up/log-in/log-out and auth-protected routes covered; ownership and feature endpoints come with Step 6)
+1. **Partial:** Write tests for each endpoint (happy path + at least one failure case) (partial: articles, auth, keywords, bookmarks, votes and search covered; sources and tags only through the permission tests)
+2. **Done:** Include tests for sign-up/log-in/log-out, ownership (one user can't read or change another's rows), feature endpoints, and auth-protected routes (sign-up/log-in/log-out, auth-protected routes, ownership for keywords and bookmarks, and the vote and search endpoints are covered)
 3. **Done:** Assert on what the API returns (behavior), not on internal method calls, so refactoring doesn't break tests unnecessarily (API tests check status codes, response data and database state)
-4. **Done:** Run the test suite and confirm everything passes (52 tests pass on `main`: 23 ingestion, 7 permissions, 10 auth, 12 article endpoints)
-5. **Done:** Deliberately break something (typo a field name, change a status code) and confirm a test catches it (done on ingestion code and on each API test file in PR #26)
+4. **Done:** Run the test suite and confirm everything passes (94 tests pass on `main`: 23 ingestion, 7 permissions, 10 auth, 12 article endpoints, 11 bookmarks, 11 keywords, 10 votes, 10 search)
+5. **Done:** Deliberately break something (typo a field name, change a status code) and confirm a test catches it (done on ingestion code and on each API test file in PR #26, on the ownership and vote upsert tests in PRs #30 and #32, and on case-insensitive search matching in PR #34)
 6. **Done:** Fix the deliberate break, confirm tests pass again
 
 ## 8. Environment Config, CORS & Reverse Proxy
