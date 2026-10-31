@@ -24,6 +24,16 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def read_comma_separated_setting(setting_name):
+    """Return a list from a comma-separated .env value, e.g. "a, b," -> ["a", "b"].
+
+    Spaces around entries are stripped and blank entries are dropped, so a
+    trailing comma or a missing variable never adds an empty value.
+    """
+    raw_value = os.getenv(setting_name, "")
+    return [entry.strip() for entry in raw_value.split(",") if entry.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
@@ -36,9 +46,12 @@ if not SECRET_KEY:
         "SECRET_KEY is not set. Add it to .env (see .env.example).")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Read from .env. Defaults to False so a missing value fails safe; only the
+# text "true" (any letter case) turns debug on.
+DEBUG = os.getenv("DEBUG", "False").strip().lower() == "true"
 
-ALLOWED_HOSTS = []
+# Comma-separated host names from .env, e.g. "127.0.0.1,localhost".
+ALLOWED_HOSTS = read_comma_separated_setting("ALLOWED_HOSTS")
 
 
 # Application definition
@@ -58,6 +71,7 @@ INSTALLED_APPS = [
     # Third-party apps
     "rest_framework",
     "rest_framework.authtoken",  # Token model: one API token per user
+    "corsheaders",  # Adds CORS headers so the React dev server can call the API
 ]
 
 REST_FRAMEWORK = {
@@ -75,6 +89,9 @@ REST_FRAMEWORK = {
 }
 
 MIDDLEWARE = [
+    # First, so CORS headers are added even to responses that other
+    # middleware (like CommonMiddleware) returns early
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -83,6 +100,11 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# Browser origins allowed to call the API, from .env, e.g.
+# "http://localhost:5173" for the React (Vite) dev server. Empty by default:
+# in production NGINX serves the frontend and API from one origin.
+CORS_ALLOWED_ORIGINS = read_comma_separated_setting("CORS_ALLOWED_ORIGINS")
 
 ROOT_URLCONF = "devfeed_api.urls"
 
