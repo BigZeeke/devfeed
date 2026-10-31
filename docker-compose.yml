@@ -1,0 +1,51 @@
+# Docker Compose setup for the DevFeed backend: a Postgres database and the
+# Django REST API served by Gunicorn.
+# Run from the repo root. Values come from .env (untracked); .env.example
+# lists every variable. Compose reads .env automatically for the ${...} values.
+
+name: devfeed
+
+services:
+  # PostgreSQL database. No port is published to the host: only the backend
+  # reaches it, over the Compose network, at the host name "db".
+  db:
+    image: postgres:18
+    environment:
+      # The image creates this database and user on first start (empty volume)
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      # Postgres 18+ images keep data under /var/lib/postgresql (not .../data)
+      - devfeed_postgres_data:/var/lib/postgresql
+    healthcheck:
+      # Ready once Postgres accepts connections; $$ leaves the variables for
+      # the container's shell to fill in, instead of Compose
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Django REST API, built from devfeed_api/Dockerfile
+  backend:
+    build: ./devfeed_api
+    # SECRET_KEY, DEBUG, ALLOWED_HOSTS, CORS_ALLOWED_ORIGINS and the GitHub
+    # token come from .env
+    env_file: .env
+    environment:
+      # Overrides the local DATABASE_URL from .env: inside Compose the
+      # database is the "db" service, not the Postgres on the host
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    ports:
+      # Host 127.0.0.1:8001 -> container 8000. Port 8000 on the host is already
+      # taken, and binding to 127.0.0.1 keeps the API off the local network.
+      - "127.0.0.1:8001:8000"
+    depends_on:
+      # Start Gunicorn only after the database passes its health check
+      db:
+        condition: service_healthy
+
+volumes:
+  # Named volume so database data survives "docker compose down"
+  # (removed only by "docker compose down --volumes")
+  devfeed_postgres_data:

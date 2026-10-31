@@ -1,0 +1,22 @@
+# Files kept out of the backend image's build context (devfeed_api/).
+
+# Secrets: settings come from environment variables at run time
+.env
+.env.*
+
+# Python caches and local virtual environments
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Local SQLite database and OS clutter
+db.sqlite3
+.DS_Store
+
+# Docker files themselves are not needed inside the image
+Dockerfile
+.dockerignore
