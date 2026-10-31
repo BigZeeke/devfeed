@@ -1,5 +1,8 @@
 from django.db.models import Count, Q
+from django.db.models.functions import Lower
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
@@ -83,3 +86,52 @@ class BookmarkViewSet(ModelViewSet):
             .select_related("article")
             .order_by("-created_at")
         )
+
+
+class SearchAutocompleteView(ListAPIView):
+    """GET /api/search/autocomplete/?field=tag&query=<text>
+
+    Returns rows whose text starts with the query (ignoring case), sorted
+    alphabetically, in the same paginated shape as the matching list
+    endpoint. Read-only: ListAPIView only accepts GET, HEAD and OPTIONS.
+    """
+
+    # One entry per field a client can autocomplete. Supporting a new field
+    # means adding an entry here; the URL and the view code stay the same.
+    SEARCHABLE_FIELDS = {
+        "tag": {"model": Tag, "column": "label", "serializer_class": TagSerializer},
+    }
+
+    def get_search_settings(self):
+        """Validate the field and query parameters; return (field settings, query text)."""
+        field_name = self.request.query_params.get("field", "")
+        query_text = self.request.query_params.get("query", "").strip()
+
+        # Collect both problems so one 400 response reports everything wrong
+        errors = {}
+        if field_name not in self.SEARCHABLE_FIELDS:
+            allowed_fields = ", ".join(sorted(self.SEARCHABLE_FIELDS))
+            errors["field"] = [f"Must be one of: {allowed_fields}."]
+        if not query_text:
+            errors["query"] = ["This parameter is required."]
+        if errors:
+            raise ValidationError(errors)
+
+        return self.SEARCHABLE_FIELDS[field_name], query_text
+
+    def get_queryset(self):
+        field_settings, query_text = self.get_search_settings()
+        column = field_settings["column"]
+        # istartswith is a case-insensitive prefix match; Django escapes % and _
+        # in query_text, so they match literally rather than as wildcards.
+        # Sorting on Lower(column) gives pytest, python, PyTorch on any database
+        # collation (some sort capitals first); the plain column breaks ties.
+        return (
+            field_settings["model"]
+            .objects.filter(**{f"{column}__istartswith": query_text})
+            .order_by(Lower(column), column)
+        )
+
+    def get_serializer_class(self):
+        field_settings, _ = self.get_search_settings()
+        return field_settings["serializer_class"]
