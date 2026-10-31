@@ -14,6 +14,7 @@ import Typography from '@mui/material/Typography'
 import DynamicFeedIcon from '@mui/icons-material/DynamicFeed'
 
 import AboutPage from './pages/AboutPage.jsx'
+import FeedPage from './pages/FeedPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
 
 // Pages shown as buttons in the app bar, in display order.
@@ -58,8 +59,7 @@ function App() {
 
       <Container component="main" maxWidth="md" sx={{ paddingY: 3 }}>
         <Routes>
-          {/* Temporary placeholder until the feed page is added in the next commit */}
-          <Route path="/" element={<Typography>The article feed comes next.</Typography>} />
+          <Route path="/" element={<FeedPage />} />
           <Route path="/about" element={<AboutPage />} />
           {/* Any other path shows the not-found page */}
           <Route path="*" element={<NotFoundPage />} />
