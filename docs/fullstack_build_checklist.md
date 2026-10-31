@@ -11,8 +11,9 @@ My repeatable order for building and testing a full-stack app: build from the da
 5. Step 6: done. Owner-scoped full CRUD on keywords and bookmarks (PR #30), article voting (PR #32), and search autocomplete on tags, parameterized through a `field` param (PR #34).
 6. Step 7 in progress: 102 automated tests pass (23 ingestion, 7 permissions, 10 auth, 12 article endpoints, 11 bookmarks, 11 keywords, 10 votes, 10 search, 8 environment config). Sources and tags are still covered only through the permission tests.
 7. Step 8: items 1–4 done (PR #38). `DEBUG`, `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` now come from `.env`; the full git-history secret search found no live secrets (results on issue #37); `django-cors-headers` allows the React dev server origins. Items 5–6 (NGINX layout, `VITE_API_URL`) stay open under issue #13 for the Docker and deploy steps.
-8. Next: Docker (Step 9), then the React shell (Step 10). Steps 9–17 not started. First deploy (step 11) targeted for Week 23 Day 3. Presentation Week 24 Day 4.
-9. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories; decide on filtering before the presentation.
+8. Step 9: backend half done (PR #42, issue #41). Backend Dockerfile (Gunicorn, non-root user), `.dockerignore`, and `docker-compose.yml` with `db` (Postgres 18, named volume, no published port) and `backend` (published at `127.0.0.1:8001`). Migrations, the full test suite, and the curl and `psql` checks all pass against the containers. The frontend Dockerfile and `frontend` service stay open under issue #15 until the React shell exists.
+9. Next: the React shell (Step 10), then the first deploy (Step 11, targeted for Week 23 Day 3). Steps 10–17 not started. Presentation Week 24 Day 4.
+10. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories; decide on filtering before the presentation.
 
 ## 1. Proposal & ERD
 
@@ -92,7 +93,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 
 ## 8. Environment Config, CORS & Reverse Proxy
 
-1. **Done:** Move every secret and setting into `.env` (`SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `DATABASE_URL`, `POSTGRES_*`, `CORS_ALLOWED_ORIGINS`, API tokens), never hardcoded (every setting that exists so far comes from `.env`; `DEBUG`, `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` moved in PR #38; `POSTGRES_*` get added with `docker-compose.yml` in Step 9)
+1. **Done:** Move every secret and setting into `.env` (`SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `DATABASE_URL`, `POSTGRES_*`, `CORS_ALLOWED_ORIGINS`, API tokens), never hardcoded (every setting that exists so far comes from `.env`; `DEBUG`, `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` moved in PR #38; `POSTGRES_*` added with `docker-compose.yml` in PR #42)
 2. **Done:** Commit a `.env.example` listing every variable with placeholder values; confirm `.env` is in `.gitignore`
 3. **Done:** Search the git history for committed secrets; if any turn up, rotate them, don't just delete the line (full search of every commit on Oct 31 found no live secrets; the only committed secret was the old `SECRET_KEY`, already rotated; results on issue #37)
 4. **Done:** Configure `django-cors-headers` so the React dev server (a different origin) can call the API (`CORS_ALLOWED_ORIGINS` from `.env`, `CorsMiddleware` first; checked with curl and covered by tests, PR #38)
@@ -101,12 +102,12 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 
 ## 9. Containerize (Docker)
 
-1. **To do:** Write a Dockerfile for the backend (Gunicorn) and a multi-stage one for the frontend (Node build, then NGINX)
-2. **To do:** Add a `.dockerignore` to each so `node_modules`, virtual environments and `.env` never end up in an image
-3. **To do:** Write a `docker-compose.yml` with `db` (Postgres with a named volume and a real user/password), `backend` and `frontend`
-4. **To do:** Build and run locally with Docker; confirm it behaves the same as my non-Docker local setup
-5. **To do:** Run migrations inside the container (`docker compose exec backend python manage.py migrate`); don't assume they carry over
-6. **To do:** Re-run the step 4–7 checks against the containerized version
+1. **Partial:** Write a Dockerfile for the backend (Gunicorn) and a multi-stage one for the frontend (Node build, then NGINX) (partial: backend Dockerfile done in PR #42, `python:3.14-slim`, Gunicorn with 3 workers, non-root user; the frontend one waits for the React shell)
+2. **Partial:** Add a `.dockerignore` to each so `node_modules`, virtual environments and `.env` never end up in an image (partial: backend `.dockerignore` done in PR #42, image checked to hold only project code; the frontend one waits for the React shell)
+3. **Partial:** Write a `docker-compose.yml` with `db` (Postgres with a named volume and a real user/password), `backend` and `frontend` (partial: `db` and `backend` done in PR #42; `db` uses Postgres 18 with the volume at `/var/lib/postgresql` and no published port; `backend` is published at `127.0.0.1:8001` because host port 8000 is taken; `frontend` waits for the React shell)
+4. **Partial:** Build and run locally with Docker; confirm it behaves the same as my non-Docker local setup (partial: backend and database behave the same through curl at `127.0.0.1:8001`, and data survives `docker compose down` and up, PR #42; the frontend comes later)
+5. **Done:** Run migrations inside the container (`docker compose exec backend python manage.py migrate`); don't assume they carry over (27 migrations applied and 20 tables created, checked with `psql` in the `db` container, PR #42)
+6. **Done:** Re-run the step 4–7 checks against the containerized version (102 tests pass inside the container on Postgres 18; curl checks for reads, unlisted `Host`, and CORS; register, token, and keyword create land in the container database, checked with `psql`; PR #42)
 
 ## 10. React Frontend: Shell and Core Flow
 
