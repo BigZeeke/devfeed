@@ -5,13 +5,13 @@ My repeatable order for building and testing a full-stack app: build from the da
 ## DevFeed status (as of Oct 31, 2026)
 
 1. Steps 1–3: done and verified on real Postgres. Both required third-party APIs are integrated as management commands (`ingest_hacker_news`, `ingest_github`), each verified idempotent.
-2. Step 4: CRUD API for sources, tags and articles is done, with PUT mutation, PUT/DELETE idempotency, nested tag updates and input validation covered by tests. Still open: with `DEBUG` on, a 500 still returns a traceback (fixed when `DEBUG` moves to `.env` in Step 8).
+2. Step 4: done. CRUD API for sources, tags and articles, with PUT mutation, PUT/DELETE idempotency, nested tag updates and input validation covered by tests. `DEBUG` now comes from `.env` and defaults to False (PR #38), so production returns Django's generic 500 page instead of a traceback.
 3. Second full-CRUD resource changed from votes to bookmarks (new Bookmark model: saved articles with a note and a per-user read flag) after instructor review. Votes stay as a feature.
 4. Step 5: done (PR #26). DRF token auth with register, log-in (token) and log-out endpoints. Sources, tags and articles are readable by anyone and writable only by staff.
 5. Step 6: done. Owner-scoped full CRUD on keywords and bookmarks (PR #30), article voting (PR #32), and search autocomplete on tags, parameterized through a `field` param (PR #34).
-6. Step 7 in progress: 94 automated tests pass (23 ingestion, 7 permissions, 10 auth, 12 article endpoints, 11 bookmarks, 11 keywords, 10 votes, 10 search). Sources and tags are still covered only through the permission tests.
-7. Step 8 started early: `SECRET_KEY` moved to `.env` and rotated, with a startup check. `DEBUG` and `ALLOWED_HOSTS` are still hardcoded.
-8. Next: Step 8 (`DEBUG` and `ALLOWED_HOSTS` to `.env`, full git-history secret search, `django-cors-headers`), then Docker and the React shell. Steps 9–17 not started. First deploy (step 11) targeted for Week 23 Day 3. Presentation Week 24 Day 4.
+6. Step 7 in progress: 102 automated tests pass (23 ingestion, 7 permissions, 10 auth, 12 article endpoints, 11 bookmarks, 11 keywords, 10 votes, 10 search, 8 environment config). Sources and tags are still covered only through the permission tests.
+7. Step 8: items 1–4 done (PR #38). `DEBUG`, `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` now come from `.env`; the full git-history secret search found no live secrets (results on issue #37); `django-cors-headers` allows the React dev server origins. Items 5–6 (NGINX layout, `VITE_API_URL`) stay open under issue #13 for the Docker and deploy steps.
+8. Next: Docker (Step 9), then the React shell (Step 10). Steps 9–17 not started. First deploy (step 11) targeted for Week 23 Day 3. Presentation Week 24 Day 4.
 9. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories; decide on filtering before the presentation.
 
 ## 1. Proposal & ERD
@@ -52,7 +52,7 @@ My repeatable order for building and testing a full-stack app: build from the da
 4. **Done:** Test every endpoint with `curl` or Postman at `http://127.0.0.1:8000` before touching any client code
 5. **Done:** Confirm GET returns real data from step 3
 6. **Done:** Confirm POST/PUT/DELETE actually mutate the database (re-check with step 3's query method) (POST verified with curl and psql; PUT and DELETE covered by tests in `test_article_endpoints.py`)
-7. **Partial:** Confirm error cases return sensible status codes (400, 404, etc.) without leaking internals (no raw stack traces or SQL in the response) (partial: validation errors return 400 and a second DELETE returns 404, both covered by tests; with `DEBUG` on, a 500 still returns a traceback until Step 8)
+7. **Done:** Confirm error cases return sensible status codes (400, 404, etc.) without leaking internals (no raw stack traces or SQL in the response) (validation errors return 400 and a second DELETE returns 404, both covered by tests; `DEBUG` defaults to False since PR #38, so a 500 returns Django's generic error page instead of a traceback; no test forces a 500)
 8. **Done:** Handle nested/related resources: creating, updating, and deleting nested objects through the API, not just flat single-model CRUD (tags through `tag_labels`: set on create, replaced by PUT, kept by PATCH without it, cleared by an empty list; covered by tests)
 9. **Done:** Keep response shape consistent across endpoints (same field naming, same pagination wrapper) so clients don't need special-case parsing per endpoint
 10. **Done:** Paginate list endpoints from the start, even with a small dataset; it's cheap now and painful to retrofit later
@@ -84,18 +84,18 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 ## 7. Automated Tests for the API
 
 1. **Partial:** Write tests for each endpoint (happy path + at least one failure case) (partial: articles, auth, keywords, bookmarks, votes and search covered; sources and tags only through the permission tests)
-2. **Done:** Include tests for sign-up/log-in/log-out, ownership (one user can't read or change another's rows), feature endpoints, and auth-protected routes (sign-up/log-in/log-out, auth-protected routes, ownership for keywords and bookmarks, and the vote and search endpoints are covered)
+2. **Done:** Include tests for sign-up/log-in/log-out, ownership (one user can't read or change another's rows), feature endpoints, and auth-protected routes (sign-up/log-in/log-out, auth-protected routes, ownership for keywords and bookmarks, and the vote and search endpoints are covered; CORS headers and the `.env` list parser are covered too)
 3. **Done:** Assert on what the API returns (behavior), not on internal method calls, so refactoring doesn't break tests unnecessarily (API tests check status codes, response data and database state)
-4. **Done:** Run the test suite and confirm everything passes (94 tests pass on `main`: 23 ingestion, 7 permissions, 10 auth, 12 article endpoints, 11 bookmarks, 11 keywords, 10 votes, 10 search)
-5. **Done:** Deliberately break something (typo a field name, change a status code) and confirm a test catches it (done on ingestion code and on each API test file in PR #26, on the ownership and vote upsert tests in PRs #30 and #32, and on case-insensitive search matching in PR #34)
+4. **Done:** Run the test suite and confirm everything passes (102 tests pass on `main`: 23 ingestion, 7 permissions, 10 auth, 12 article endpoints, 11 bookmarks, 11 keywords, 10 votes, 10 search, 8 environment config)
+5. **Done:** Deliberately break something (typo a field name, change a status code) and confirm a test catches it (done on ingestion code and on each API test file in PR #26, on the ownership and vote upsert tests in PRs #30 and #32, on case-insensitive search matching in PR #34, and on `CorsMiddleware` in PR #38)
 6. **Done:** Fix the deliberate break, confirm tests pass again
 
 ## 8. Environment Config, CORS & Reverse Proxy
 
-1. **Partial:** Move every secret and setting into `.env` (`SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `DATABASE_URL`, `POSTGRES_*`, `CORS_ALLOWED_ORIGINS`, API tokens), never hardcoded (partial: `SECRET_KEY`, `DATABASE_URL`, GitHub token done; `DEBUG` and `ALLOWED_HOSTS` still hardcoded)
+1. **Done:** Move every secret and setting into `.env` (`SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `DATABASE_URL`, `POSTGRES_*`, `CORS_ALLOWED_ORIGINS`, API tokens), never hardcoded (every setting that exists so far comes from `.env`; `DEBUG`, `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` moved in PR #38; `POSTGRES_*` get added with `docker-compose.yml` in Step 9)
 2. **Done:** Commit a `.env.example` listing every variable with placeholder values; confirm `.env` is in `.gitignore`
-3. **Partial:** Search the git history for committed secrets; if any turn up, rotate them, don't just delete the line (partial: committed `SECRET_KEY` found and rotated; full history search not yet run)
-4. **To do:** Configure `django-cors-headers` so the React dev server (a different origin) can call the API
+3. **Done:** Search the git history for committed secrets; if any turn up, rotate them, don't just delete the line (full search of every commit on Oct 31 found no live secrets; the only committed secret was the old `SECRET_KEY`, already rotated; results on issue #37)
+4. **Done:** Configure `django-cors-headers` so the React dev server (a different origin) can call the API (`CORS_ALLOWED_ORIGINS` from `.env`, `CorsMiddleware` first; checked with curl and covered by tests, PR #38)
 5. **To do:** Plan the production layout: NGINX serves the React build and proxies `/api/` to the backend, so both share one origin
 6. **To do:** Remember `VITE_API_URL` is baked in at `npm run build`, not read at runtime
 
