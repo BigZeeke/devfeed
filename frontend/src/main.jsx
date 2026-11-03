@@ -2,7 +2,8 @@
  * Entry point: mounts the React app into the #root element of index.html.
  *
  * Wraps the app in the providers every page needs: the MUI theme,
- * CssBaseline (consistent default styles), and the React Router browser router.
+ * CssBaseline (consistent default styles), the React Router browser router,
+ * and the AuthProvider (logged-in session), which needs the router.
  */
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -17,6 +18,7 @@ import '@fontsource/roboto/500.css'
 import '@fontsource/roboto/700.css'
 
 import App from './App.jsx'
+import AuthProvider from './auth/AuthProvider.jsx'
 import devfeedTheme from './theme.js'
 
 createRoot(document.getElementById('root')).render(
@@ -25,7 +27,9 @@ createRoot(document.getElementById('root')).render(
       {/* Resets browser default styles and applies the theme's background and text colors */}
       <CssBaseline />
       <BrowserRouter>
-        <App />
+        <AuthProvider>
+          <App />
+        </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
   </StrictMode>,
