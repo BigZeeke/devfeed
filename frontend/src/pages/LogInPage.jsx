@@ -6,9 +6,10 @@
  * rejected, location.state.sessionEnded is true and a notice explains why.
  */
 import { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router'
 import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
+import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -89,6 +90,13 @@ function LogInPage() {
       <Button type="submit" variant="contained" disabled={isSubmitting} sx={{ alignSelf: 'flex-start' }}>
         {isSubmitting ? 'Logging in…' : 'Log in'}
       </Button>
+
+      <Typography variant="body2">
+        No account yet?{' '}
+        <Link component={RouterLink} to="/signup">
+          Sign up
+        </Link>
+      </Typography>
     </Stack>
   )
 }

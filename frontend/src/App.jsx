@@ -20,6 +20,7 @@ import AboutPage from './pages/AboutPage.jsx'
 import FeedPage from './pages/FeedPage.jsx'
 import LogInPage from './pages/LogInPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
+import SignUpPage from './pages/SignUpPage.jsx'
 
 // Pages shown as buttons in the app bar, in display order.
 const navigationLinks = [
@@ -90,9 +91,14 @@ function App() {
                 </Button>
               </>
             ) : (
-              <Button component={NavLink} to="/login" color="inherit" sx={activeLinkStyle}>
-                Log in
-              </Button>
+              <>
+                <Button component={NavLink} to="/login" color="inherit" sx={activeLinkStyle}>
+                  Log in
+                </Button>
+                <Button component={NavLink} to="/signup" color="inherit" sx={activeLinkStyle}>
+                  Sign up
+                </Button>
+              </>
             )}
           </Box>
         </Toolbar>
@@ -108,6 +114,7 @@ function App() {
           <Route path="/" element={<FeedPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/login" element={<LogInPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
           {/* Any other path shows the not-found page */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
