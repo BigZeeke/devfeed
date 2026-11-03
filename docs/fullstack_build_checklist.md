@@ -2,7 +2,7 @@
 
 My repeatable order for building and testing a full-stack app: build from the data outward, and don't move to the next layer until the current one is verified, not just written. Deploy early: a working skeleton on the real server beats a finished app that only runs on my laptop.
 
-## DevFeed status (as of Oct 31, 2026)
+## DevFeed status (as of Nov 2, 2026)
 
 1. Steps 1–3: done and verified on real Postgres. Both required third-party APIs are integrated as management commands (`ingest_hacker_news`, `ingest_github`), each verified idempotent.
 2. Step 4: done. CRUD API for sources, tags and articles, with PUT mutation, PUT/DELETE idempotency, nested tag updates and input validation covered by tests. `DEBUG` now comes from `.env` and defaults to False (PR #38), so production returns Django's generic 500 page instead of a traceback.
@@ -12,10 +12,11 @@ My repeatable order for building and testing a full-stack app: build from the da
 6. Step 7 in progress: 102 automated tests pass (23 ingestion, 7 permissions, 10 auth, 12 article endpoints, 11 bookmarks, 11 keywords, 10 votes, 10 search, 8 environment config). Sources and tags are still covered only through the permission tests.
 7. Step 8: items 1–4 done (PR #38). `DEBUG`, `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` now come from `.env`; the full git-history secret search found no live secrets (results on issue #37); `django-cors-headers` allows the React dev server origins. Items 5–6 (NGINX layout, `VITE_API_URL`) stay open under issue #13 for the Docker and deploy steps.
 8. Step 9: backend half done (PR #42, issue #41). Backend Dockerfile (Gunicorn, non-root user), `.dockerignore`, and `docker-compose.yml` with `db` (Postgres 18, named volume, no published port) and `backend` (published at `127.0.0.1:8001`). Migrations, the full test suite, and the curl and `psql` checks all pass against the containers. The frontend Dockerfile and `frontend` service stay open under issue #15; now that the React shell exists, they come next.
-9. Step 10: items 1–4 and 7 done (PR #46, issue #45). Vite + React + Material UI app in `frontend/` with one theme (light and dark palettes), React Router with an app bar, and the paginated article feed against the real API, checked against `psql`. Items 5–6 (auth in the UI, Context) stay open under issue #10.
-10. Next: auth in the UI (Step 10 items 5–6), then the frontend Dockerfile and `frontend` service (issue #15), then the first deploy (Step 11, targeted for Week 23 Day 3). Steps 11–17 not started. Presentation Week 24 Day 4.
+9. Step 10: items 1–4 and 7 done (PR #46, issue #45). Vite + React + Material UI app in `frontend/` with one theme (light and dark palettes), React Router with an app bar, and the paginated article feed against the real API, checked against `psql`. Items 5–6 done (PR #52, issue #51): sign-up (with password confirmation), log-in and log-out pages; the token is stored in `localStorage` and sent on every request; one app-wide rule turns a rejected token into a log-in page notice; the session is shared through an auth Context. Checked against `psql` for both an existing and a new user. Article links are limited to `http`/`https` URLs (PR #50, issue #49). Issue #10 stays open for the Step 12 features.
+10. Next: the frontend Dockerfile and `frontend` service (issue #15), then the first deploy (Step 11, targeted for Week 23 Day 3). Steps 11–17 not started. Presentation Week 24 Day 4.
 11. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories (one showed on page 1 of the feed while testing PR #46); decide on filtering before the presentation.
 12. Known issue: the article list orders by `-published_at` with no tie-breaker, and one timestamp is shared locally, so equal-time articles could shift between pages. Add `-id` to the ordering, with a test, in a small backend issue.
+13. Known issue: the JS bundle is about 516 kB after the auth pages, and Vite warns about chunks over 500 kB. Splitting pages into separate chunks can fix it later; the build still succeeds.
 
 ## 1. Proposal & ERD
 
@@ -117,8 +118,8 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 2. **Done:** One MUI theme (palette, typography, dark mode) instead of scattered CSS (`frontend/src/theme.js`: light and dark palettes chosen by the browser's `prefers-color-scheme`; the template CSS was removed in favor of `CssBaseline`; no manual toggle yet; PR #46)
 3. **Done:** Add routing (React Router) and an app bar with navigation between every page (React Router 8.5.1 with `BrowserRouter`; Feed and About links with the current page underlined; catch-all 404 page; PR #46)
 4. **Done:** Fetch from the API with loading and error states (TanStack Query or `useEffect`) (`useEffect` with an `AbortController` in `FeedPage.jsx`; spinner, error and empty-state alerts; base URL and error handling live in `api.js`; PR #46)
-5. **To do:** Sign-up, log-in and log-out in the UI; store the token, send it on requests, handle a 401 (issue #10)
-6. **To do:** Share the logged-in user through Context (issue #10)
+5. **Done:** Sign-up, log-in and log-out in the UI; store the token, send it on requests, handle a 401 (`/signup` and `/login` pages with Django's messages under each field; token and username in `localStorage`; `api.js` sends `Authorization: Token <key>`; a 401 on a request that sent a token clears the session and opens `/login` with a notice; the stored token's hash matched `authtoken_token` in `psql`, and log-out deleted the row; PR #52)
+6. **Done:** Share the logged-in user through Context (`AuthContext.js`, `AuthProvider.jsx`, `useAuth.js` in `frontend/src/auth/`; the app bar shows the username and Log out when logged in; PR #52)
 7. **Done:** Get one core flow working end to end against the real API (for DevFeed: the paginated feed) (20 articles per page with MUI `Pagination` synced to `?page=`; the first three cards and the page sizes of 20, 20 and 10 matched `psql` on local Postgres; PR #46)
 
 ## 11. First Deploy (Walking Skeleton)
