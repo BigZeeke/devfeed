@@ -13,10 +13,11 @@ My repeatable order for building and testing a full-stack app: build from the da
 7. Step 8: done. Items 1–4 in PR #38: `DEBUG`, `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` come from `.env`; the full git-history secret search found no live secrets (results on issue #37); `django-cors-headers` allows the React dev server origins. Items 5–6 in PR #56 (issue #55): NGINX serves the React build and proxies `/api/` to the backend on one origin, and the frontend image builds with `VITE_API_URL=""`. Issue #13 stays open for the CSP header and the EC2-specific config.
 8. Step 9: done. Backend in PR #42 (issue #41): Dockerfile (Gunicorn, non-root user), `.dockerignore`, and `docker-compose.yml` with `db` (Postgres 18, named volume, no published port) and `backend` (published at `127.0.0.1:8001`). Frontend in PR #56 (issue #55): multi-stage Dockerfile (`node:26-slim` build, `nginx:1.30-alpine` serving only `dist/`), `.dockerignore`, `nginx.conf`, and a `frontend` service published at `127.0.0.1:8080`. The feed, sign-up and log-in through port 8080 were checked against `psql` in the `db` container. Issue #15 stays open for the CI image builds.
 9. Step 10: items 1–4 and 7 done (PR #46, issue #45). Vite + React + Material UI app in `frontend/` with one theme (light and dark palettes), React Router with an app bar, and the paginated article feed against the real API, checked against `psql`. Items 5–6 done (PR #52, issue #51): sign-up (with password confirmation), log-in and log-out pages; the token is stored in `localStorage` and sent on every request; one app-wide rule turns a rejected token into a log-in page notice; the session is shared through an auth Context. Checked against `psql` for both an existing and a new user. Article links are limited to `http`/`https` URLs (PR #50, issue #49). Issue #10 stays open for the Step 12 features.
-10. Next: the first deploy (Step 11, targeted for Week 23 Day 3). Steps 11–17 not started. Presentation Week 24 Day 4.
-11. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories (one showed on page 1 of the feed while testing PR #46); decide on filtering before the presentation.
-12. Known issue: the article list orders by `-published_at` with no tie-breaker, and one timestamp is shared locally, so equal-time articles could shift between pages. Add `-id` to the ordering, with a test, in a small backend issue.
-13. Known issue: the JS bundle is about 516 kB after the auth pages, and Vite warns about chunks over 500 kB. Splitting pages into separate chunks can fix it later; the build still succeeds.
+10. Step 11: done (Nov 3, 2026). First deploy live at `http://44.248.236.123` on one `t3.small` EC2 instance (`i-0a22ed6f7e3e77266`, us-west-2) running the same Docker Compose stack, with a $10 monthly budget alert. The frontend's host port comes from `FRONTEND_HOST_BINDING` (PR #60, issue #59), so the server publishes port 80 and my Mac keeps `127.0.0.1:8080`. No HTTPS yet. Terminate the instance after the presentation unless I keep it running on purpose.
+11. Next: the Step 12 features (issue #10), redeploying after each one. Steps 12–17 not started. Presentation Week 24 Day 4.
+12. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories (one showed on page 1 of the feed while testing PR #46); decide on filtering before the presentation.
+13. Known issue: the article list orders by `-published_at` with no tie-breaker, and one timestamp is shared locally, so equal-time articles could shift between pages. Add `-id` to the ordering, with a test, in a small backend issue.
+14. Known issue: the JS bundle is about 516 kB after the auth pages, and Vite warns about chunks over 500 kB. Splitting pages into separate chunks can fix it later; the build still succeeds.
 
 ## 1. Proposal & ERD
 
@@ -124,14 +125,14 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 
 ## 11. First Deploy (Walking Skeleton)
 
-1. **To do:** Set a $10 monthly AWS budget alert before launching anything
-2. **To do:** Launch the EC2 instance; security group allows SSH from my IP only and HTTP from anywhere
-3. **To do:** Install Docker and the Compose plugin
-4. **To do:** Clone the repo, create `.env` from `.env.example` with production values
-5. **To do:** `docker compose up -d --build`, then run migrations and `createsuperuser` inside the backend container
-6. **To do:** Run the ingestion commands once on the server and confirm rows in Postgres
-7. **To do:** Confirm the site loads from outside the instance and sign-up/log-in work on the live URL
-8. **To do:** Ship it even if it's unfinished and ugly; production surprises (CORS, env vars, migrations) are cheaper to find now
+1. **Done:** Set a $10 monthly AWS budget alert before launching anything (`devfeed-monthly-10-usd`, counting usage before credits so it still warns while credits pay the bill; emails at $5 and $10)
+2. **Done:** Launch the EC2 instance; security group allows SSH from my IP only and HTTP from anywhere (`t3.small`, Ubuntu 24.04 LTS, 20 GB gp3 disk, CPU credits set to standard so a busy CPU slows down instead of adding charges, IMDSv2 required; key pair generated on my Mac with only the public key imported; security group `devfeed-web`)
+3. **Done:** Install Docker and the Compose plugin (Docker's apt repository per the Docker docs: Docker 29.9.3, Compose v5.7.0)
+4. **Done:** Clone the repo, create `.env` from `.env.example` with production values (`SECRET_KEY` and `POSTGRES_PASSWORD` generated on the server and never copied off it; `DEBUG=False`, `ALLOWED_HOSTS` set to the public IP, empty `CORS_ALLOWED_ORIGINS`, `FRONTEND_HOST_BINDING=80`; file readable only by the server user; no GitHub token, so ingestion runs at the unauthenticated rate limit)
+5. **Done:** `docker compose up -d --build`, then run migrations and `createsuperuser` inside the backend container (27 migrations applied; one superuser, confirmed by count in `psql`)
+6. **Done:** Run the ingestion commands once on the server and confirm rows in Postgres (20 Hacker News and 10 GitHub articles; `psql` on the server and the public API both count 30)
+7. **Done:** Confirm the site loads from outside the instance and sign-up/log-in work on the live URL (the feed's first three cards matched `psql`, 2 pages, a reload on `/login` loads the app, and API calls go to the same origin; sign-up, log-out and log-in as `live_test_user` matched `authtoken_token` on the server: one token after sign-up, none after log-out, one again after log-in)
+8. **Done:** Ship it even if it's unfinished and ugly; production surprises (CORS, env vars, migrations) are cheaper to find now (surprises found: the frontend was published only on `127.0.0.1`, fixed in PR #60; browsers block `crypto.subtle` on plain HTTP, which only affected my token-hash check, replaced by an authenticated request plus a `psql` count)
 
 ## 12. React Feature Completion
 
