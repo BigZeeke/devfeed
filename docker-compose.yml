@@ -1,5 +1,6 @@
-# Docker Compose setup for the DevFeed backend: a Postgres database and the
-# Django REST API served by Gunicorn.
+# Docker Compose setup for DevFeed: a Postgres database, the Django REST API
+# served by Gunicorn, and the React frontend served by NGINX (which also
+# proxies /api/ to the backend, so the browser sees one origin).
 # Run from the repo root. Values come from .env (untracked); .env.example
 # lists every variable. Compose reads .env automatically for the ${...} values.
 
@@ -44,6 +45,21 @@ services:
       # Start Gunicorn only after the database passes its health check
       db:
         condition: service_healthy
+
+  # React app built into static files and served by NGINX, built from
+  # frontend/Dockerfile. frontend/nginx.conf proxies /api/ to the backend
+  # service at backend:8000.
+  frontend:
+    build: ./frontend
+    ports:
+      # Host 127.0.0.1:8080 -> container 80. Port 80 on the host is already
+      # taken, and binding to 127.0.0.1 keeps the site off the local network.
+      - "127.0.0.1:8080:80"
+    depends_on:
+      # NGINX looks up the "backend" host name when it starts, so the backend
+      # container has to exist first
+      backend:
+        condition: service_started
 
 volumes:
   # Named volume so database data survives "docker compose down"

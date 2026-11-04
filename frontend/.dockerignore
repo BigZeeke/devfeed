@@ -1,0 +1,12 @@
+# Keeps local files out of the frontend image's build context.
+# npm ci installs dependencies fresh, and dist/ is built inside the image.
+node_modules
+dist
+
+# Local environment files (none are needed: VITE_API_URL is set in the Dockerfile)
+.env
+.env.*
+
+# The Docker files themselves aren't needed inside the image
+Dockerfile
+.dockerignore
