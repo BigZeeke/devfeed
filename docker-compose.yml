@@ -52,9 +52,11 @@ services:
   frontend:
     build: ./frontend
     ports:
-      # Host 127.0.0.1:8080 -> container 80. Port 80 on the host is already
-      # taken, and binding to 127.0.0.1 keeps the site off the local network.
-      - "127.0.0.1:8080:80"
+      # Host side comes from FRONTEND_HOST_BINDING in .env, -> container 80.
+      # Default 127.0.0.1:8080: port 80 on my Mac is already taken, and
+      # 127.0.0.1 keeps the site off the local network. The server sets 80,
+      # which publishes port 80 on every interface so the site is public.
+      - "${FRONTEND_HOST_BINDING:-127.0.0.1:8080}:80"
     depends_on:
       # NGINX looks up the "backend" host name when it starts, so the backend
       # container has to exist first
