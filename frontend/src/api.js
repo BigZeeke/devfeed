@@ -19,8 +19,13 @@ const API_BASE_URL =
 export const ARTICLES_PAGE_SIZE = 20
 export const BOOKMARKS_PAGE_SIZE = 20
 
+export const KEYWORDS_PAGE_SIZE = 20
+
 // The Bookmark model's note column is a CharField with max_length=500.
 export const BOOKMARK_NOTE_MAX_LENGTH = 500
+
+// The UserKeyword model's keyword column is a CharField with max_length=100.
+export const KEYWORD_MAX_LENGTH = 100
 
 // An error carrying the HTTP status and the parsed response body (or null),
 // so pages can show a useful message and forms can show field errors.
@@ -175,4 +180,42 @@ export function updateBookmark(bookmarkId, changedFields) {
  */
 export function deleteBookmark(bookmarkId) {
   return fetchJson(`/api/bookmarks/${bookmarkId}/`, { method: 'DELETE' })
+}
+
+/**
+ * GET one page of the logged-in user's keywords, sorted alphabetically:
+ * { count, next, previous, results }. Each result has id, keyword and weight.
+ */
+export function fetchKeywordsPage(pageNumber, { signal } = {}) {
+  return fetchJson(`/api/keywords/?page=${pageNumber}`, { signal })
+}
+
+/**
+ * POST a new keyword. The API lowercases it before the unique check, so
+ * following one that already exists (in any case) returns 400 with
+ * non_field_errors. Returns the keyword with status 201.
+ */
+export function createKeyword({ keyword, weight }) {
+  return fetchJson('/api/keywords/', {
+    method: 'POST',
+    body: { keyword, weight },
+  })
+}
+
+/**
+ * PATCH only the given fields of a keyword ({ keyword } and/or { weight }).
+ * Returns the updated keyword. Another user's keyword returns 404.
+ */
+export function updateKeyword(keywordId, changedFields) {
+  return fetchJson(`/api/keywords/${keywordId}/`, {
+    method: 'PATCH',
+    body: changedFields,
+  })
+}
+
+/**
+ * DELETE a keyword. Returns null (status 204).
+ */
+export function deleteKeyword(keywordId) {
+  return fetchJson(`/api/keywords/${keywordId}/`, { method: 'DELETE' })
 }
