@@ -2,7 +2,7 @@
 
 My repeatable order for building and testing a full-stack app: build from the data outward, and don't move to the next layer until the current one is verified, not just written. Deploy early: a working skeleton on the real server beats a finished app that only runs on my laptop.
 
-## DevFeed status (as of Nov 3, 2026)
+## DevFeed status (as of Nov 5, 2026)
 
 1. Steps 1–3: done and verified on real Postgres. Both required third-party APIs are integrated as management commands (`ingest_hacker_news`, `ingest_github`), each verified idempotent.
 2. Step 4: done. CRUD API for sources, tags and articles, with PUT mutation, PUT/DELETE idempotency, nested tag updates and input validation covered by tests. `DEBUG` now comes from `.env` and defaults to False (PR #38), so production returns Django's generic 500 page instead of a traceback.
@@ -14,10 +14,11 @@ My repeatable order for building and testing a full-stack app: build from the da
 8. Step 9: done. Backend in PR #42 (issue #41): Dockerfile (Gunicorn, non-root user), `.dockerignore`, and `docker-compose.yml` with `db` (Postgres 18, named volume, no published port) and `backend` (published at `127.0.0.1:8001`). Frontend in PR #56 (issue #55): multi-stage Dockerfile (`node:26-slim` build, `nginx:1.30-alpine` serving only `dist/`), `.dockerignore`, `nginx.conf`, and a `frontend` service published at `127.0.0.1:8080`. The feed, sign-up and log-in through port 8080 were checked against `psql` in the `db` container. Issue #15 stays open for the CI image builds.
 9. Step 10: items 1–4 and 7 done (PR #46, issue #45). Vite + React + Material UI app in `frontend/` with one theme (light and dark palettes), React Router with an app bar, and the paginated article feed against the real API, checked against `psql`. Items 5–6 done (PR #52, issue #51): sign-up (with password confirmation), log-in and log-out pages; the token is stored in `localStorage` and sent on every request; one app-wide rule turns a rejected token into a log-in page notice; the session is shared through an auth Context. Checked against `psql` for both an existing and a new user. Article links are limited to `http`/`https` URLs (PR #50, issue #49). Issue #10 stays open for the Step 12 features.
 10. Step 11: done (Nov 3, 2026). First deploy live at `http://44.248.236.123` on one `t3.small` EC2 instance (`i-0a22ed6f7e3e77266`, us-west-2) running the same Docker Compose stack, with a $10 monthly budget alert. The frontend's host port comes from `FRONTEND_HOST_BINDING` (PR #60, issue #59), so the server publishes port 80 and my Mac keeps `127.0.0.1:8080`. No HTTPS yet. Terminate the instance after the presentation unless I keep it running on purpose.
-11. Next: the Step 12 features (issue #10), redeploying after each one. Steps 12–17 not started. Presentation Week 24 Day 4.
-12. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories (one showed on page 1 of the feed while testing PR #46); decide on filtering before the presentation.
-13. Known issue: the article list orders by `-published_at` with no tie-breaker, and one timestamp is shared locally, so equal-time articles could shift between pages. Add `-id` to the ordering, with a test, in a small backend issue.
-14. Known issue: the JS bundle is about 516 kB after the auth pages, and Vite warns about chunks over 500 kB. Splitting pages into separate chunks can fix it later; the build still succeeds.
+11. Step 12: full CRUD in the UI on both user-owned resources is done, which completes the MVP's two-model CRUD requirement. Bookmarks in PR #64 (issue #63): a Save button with an optional note on each feed card, and a Saved page with a read checkbox, note editing and remove. Keywords in PR #66 (issue #65): a Keywords page with a Follow form, an alphabetical list, an edit dialog and stop following. Every operation was checked in the browser against `psql` locally and again on the live site after each redeploy. The redeploy is a script I copy to the server and run with the expected commit (`redeploy_devfeed_server.sh`, not in the repo yet). Issue #10 stays open for the voting UI and the autocomplete search bar.
+12. Next: the README (Step 15), the last required MVP item. Then voting and autocomplete if time allows. Steps 13–17 not started. Presentation Week 24 Day 4.
+13. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories (one showed on page 1 of the feed while testing PR #46); decide on filtering before the presentation.
+14. Known issue: the article list orders by `-published_at` with no tie-breaker, and one timestamp is shared locally, so equal-time articles could shift between pages. Add `-id` to the ordering, with a test, in a small backend issue.
+15. Known issue: the JS bundle is about 560 kB after the bookmark and keyword pages, and Vite warns about chunks over 500 kB. Splitting pages into separate chunks can fix it later; the build still succeeds.
 
 ## 1. Proposal & ERD
 
@@ -136,12 +137,12 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 
 ## 12. React Feature Completion
 
-1. **To do:** Build out full CRUD in the UI for each user-owned resource (list, create, edit, delete)
+1. **Done:** Build out full CRUD in the UI for each user-owned resource (list, create, edit, delete) (bookmarks in PR #64: Save with a note from each feed card, then list, edit the note, mark read and remove on `/saved`; keywords in PR #66: follow, list, edit and stop following on `/keywords`; duplicates show a clear message instead of DRF's unique-set error)
 2. **To do:** Build the autocomplete search bar (debounced input, calls the endpoint from step 6)
 3. **To do:** Build the voting UI (thumbs up/down, reflects the current vote per article)
-4. **To do:** Manually click through every CRUD operation in the browser
-5. **To do:** After each action, re-check the database directly to confirm nothing silently failed
-6. **To do:** Redeploy after each feature lands, not all at the end
+4. **Done:** Manually click through every CRUD operation in the browser (bookmarks and keywords, on my Mac and on the live site)
+5. **Done:** After each action, re-check the database directly to confirm nothing silently failed (`articles_bookmark` and `user_profiles_userkeyword` in `psql`, locally and on the server; the commit commands also checked the final rows before committing)
+6. **Partial:** Redeploy after each feature lands, not all at the end (done after PR #64 and PR #66 with a redeploy script that pulls `main`, checks the expected commit, rebuilds, and reports container states, unapplied migrations and the served bundle; voting and autocomplete still to come)
 
 ## 13. Production Hardening & Regression Pass
 
