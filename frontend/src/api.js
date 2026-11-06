@@ -14,8 +14,13 @@ import { readStoredSession } from './auth/authStorage.js'
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '')
 
-// Matches PAGE_SIZE in the Django REST Framework settings.
+// Matches PAGE_SIZE in the Django REST Framework settings, which applies to
+// every list endpoint.
 export const ARTICLES_PAGE_SIZE = 20
+export const BOOKMARKS_PAGE_SIZE = 20
+
+// The Bookmark model's note column is a CharField with max_length=500.
+export const BOOKMARK_NOTE_MAX_LENGTH = 500
 
 // An error carrying the HTTP status and the parsed response body (or null),
 // so pages can show a useful message and forms can show field errors.
@@ -132,4 +137,42 @@ export function logInUser({ username, password }) {
  */
 export function logOutUser() {
   return fetchJson('/api/auth/logout/', { method: 'POST', reportUnauthorized: false })
+}
+
+/**
+ * GET one page of the logged-in user's bookmarks, newest first:
+ * { count, next, previous, results }. Each result has id, article,
+ * article_title, note, is_read, created_at and updated_at.
+ */
+export function fetchBookmarksPage(pageNumber, { signal } = {}) {
+  return fetchJson(`/api/bookmarks/?page=${pageNumber}`, { signal })
+}
+
+/**
+ * POST a new bookmark for an article. Returns the bookmark with status 201.
+ * Saving the same article twice returns 400 with non_field_errors.
+ */
+export function createBookmark({ articleId, note = '' }) {
+  return fetchJson('/api/bookmarks/', {
+    method: 'POST',
+    body: { article: articleId, note },
+  })
+}
+
+/**
+ * PATCH only the given fields of a bookmark ({ note } and/or { is_read }).
+ * Returns the updated bookmark. Another user's bookmark returns 404.
+ */
+export function updateBookmark(bookmarkId, changedFields) {
+  return fetchJson(`/api/bookmarks/${bookmarkId}/`, {
+    method: 'PATCH',
+    body: changedFields,
+  })
+}
+
+/**
+ * DELETE a bookmark. Returns null (status 204).
+ */
+export function deleteBookmark(bookmarkId) {
+  return fetchJson(`/api/bookmarks/${bookmarkId}/`, { method: 'DELETE' })
 }
