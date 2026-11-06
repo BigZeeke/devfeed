@@ -1,12 +1,18 @@
 /**
  * One article in the feed: title link, source, publish date, score, and tags.
+ *
+ * When the parent passes onSaveClick (only for logged-in users), the card
+ * also shows a Save button that starts saving the article as a bookmark.
  */
+import Button from '@mui/material/Button'
 import Card from '@mui/material/Card'
+import CardActions from '@mui/material/CardActions'
 import CardContent from '@mui/material/CardContent'
 import Chip from '@mui/material/Chip'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder'
 
 // Article URLs come from third-party APIs, so only normal web addresses
 // become links. Anything else (for example "javascript:...") could run code.
@@ -37,7 +43,7 @@ function formatPublishedDate(publishedAt) {
   })
 }
 
-function ArticleCard({ article }) {
+function ArticleCard({ article, onSaveClick }) {
   const safeLinkUrl = getSafeLinkUrl(article.url)
 
   return (
@@ -74,6 +80,20 @@ function ArticleCard({ article }) {
           </Stack>
         )}
       </CardContent>
+
+      {onSaveClick && (
+        <CardActions sx={{ paddingTop: 0 }}>
+          <Button
+            size="small"
+            startIcon={<BookmarkBorderIcon />}
+            onClick={() => onSaveClick(article)}
+            // The visible text is just "Save"; screen readers also hear which article.
+            aria-label={`Save ${article.title}`}
+          >
+            Save
+          </Button>
+        </CardActions>
+      )}
     </Card>
   )
 }
