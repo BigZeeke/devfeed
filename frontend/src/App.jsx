@@ -20,6 +20,7 @@ import AboutPage from './pages/AboutPage.jsx'
 import FeedPage from './pages/FeedPage.jsx'
 import LogInPage from './pages/LogInPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
+import SavedPage from './pages/SavedPage.jsx'
 import SignUpPage from './pages/SignUpPage.jsx'
 
 // Pages shown as buttons in the app bar, in display order.
@@ -82,6 +83,9 @@ function App() {
 
             {isLoggedIn ? (
               <>
+                <Button component={NavLink} to="/saved" color="inherit" sx={activeLinkStyle}>
+                  Saved
+                </Button>
                 {/* Shows who is logged in */}
                 <Typography variant="body2" sx={{ marginLeft: 2 }}>
                   {username}
@@ -113,6 +117,7 @@ function App() {
         <Routes>
           <Route path="/" element={<FeedPage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/saved" element={<SavedPage />} />
           <Route path="/login" element={<LogInPage />} />
           <Route path="/signup" element={<SignUpPage />} />
           {/* Any other path shows the not-found page */}
