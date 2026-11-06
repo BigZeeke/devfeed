@@ -3,7 +3,9 @@
  *
  * A form at the top follows a new keyword with a weight (create), and the
  * list below shows followed keywords alphabetically with their weights
- * (read). The page number lives in the URL (?page=2), like the feed.
+ * (read). Each row has Edit (update, in a dialog) and Stop following
+ * (delete, after a confirm step). The page number lives in the URL
+ * (?page=2), like the feed.
  */
 import { Fragment, useEffect, useState } from 'react'
 import { Link as RouterLink, useSearchParams } from 'react-router'
@@ -12,7 +14,13 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
+import IconButton from '@mui/material/IconButton'
 import Link from '@mui/material/Link'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
@@ -22,13 +30,17 @@ import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 
 import {
   ApiError,
   createKeyword,
+  deleteKeyword,
   fetchKeywordsPage,
   KEYWORD_MAX_LENGTH,
   KEYWORDS_PAGE_SIZE,
+  updateKeyword,
 } from '../api.js'
 import { useAuth } from '../auth/useAuth.js'
 import { describeFormError } from '../formErrors.js'
@@ -70,6 +82,94 @@ function describeKeywordFormError(error) {
 // Anything else is sent as a number, and the API rejects non-integers.
 function readWeightInput(weightInput) {
   return weightInput.trim() === '' ? undefined : Number(weightInput)
+}
+
+// Edit dialog for one keyword. The parent mounts it only while it is open,
+// so each opening starts from the keyword's current values. Only fields that
+// changed are sent; renaming to a keyword already followed shows the same
+// "already following" message as the Follow form.
+function KeywordEditDialog({ keywordItem, onCancel, onSaved }) {
+  const [keywordInput, setKeywordInput] = useState(keywordItem.keyword)
+  const [weightInput, setWeightInput] = useState(String(keywordItem.weight))
+  const [isSaving, setIsSaving] = useState(false)
+  const [formError, setFormError] = useState({ fieldErrors: {}, generalMessage: null })
+
+  async function handleSubmit(event) {
+    // Stop the browser's own form submit (a full page reload).
+    event.preventDefault()
+
+    // An empty weight box keeps the current weight, since nothing is sent for it.
+    const changedFields = {}
+    if (keywordInput !== keywordItem.keyword) {
+      changedFields.keyword = keywordInput
+    }
+    const newWeight = readWeightInput(weightInput)
+    if (newWeight !== undefined && newWeight !== keywordItem.weight) {
+      changedFields.weight = newWeight
+    }
+    // Nothing changed: close without a request.
+    if (Object.keys(changedFields).length === 0) {
+      onCancel()
+      return
+    }
+
+    setIsSaving(true)
+    setFormError({ fieldErrors: {}, generalMessage: null })
+    try {
+      await updateKeyword(keywordItem.id, changedFields)
+      onSaved()
+    } catch (error) {
+      setFormError(describeKeywordFormError(error))
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      // Closing by Escape or a click outside is blocked while a save is in flight.
+      onClose={isSaving ? undefined : onCancel}
+      fullWidth
+      maxWidth="xs"
+      slotProps={{ paper: { component: 'form', onSubmit: handleSubmit, noValidate: true } }}
+    >
+      <DialogTitle>Edit keyword</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ paddingTop: 1 }}>
+          {formError.generalMessage && <Alert severity="error">{formError.generalMessage}</Alert>}
+          <TextField
+            label="Keyword"
+            name="keyword"
+            value={keywordInput}
+            onChange={(event) => setKeywordInput(event.target.value)}
+            error={Boolean(formError.fieldErrors.keyword)}
+            helperText={formError.fieldErrors.keyword ?? 'Saved in lowercase'}
+            slotProps={{ htmlInput: { maxLength: KEYWORD_MAX_LENGTH } }}
+            required
+            autoFocus
+          />
+          <TextField
+            label="Weight"
+            name="weight"
+            type="number"
+            value={weightInput}
+            onChange={(event) => setWeightInput(event.target.value)}
+            error={Boolean(formError.fieldErrors.weight)}
+            helperText={formError.fieldErrors.weight ?? 'Whole number'}
+            slotProps={{ htmlInput: { step: 1 } }}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel} disabled={isSaving}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="contained" disabled={isSaving || keywordInput.trim() === ''}>
+          {isSaving ? 'Saving…' : 'Save'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
 }
 
 // Logged-out visitors get a pointer to the log-in page instead of a request
@@ -118,6 +218,15 @@ function KeywordsManager() {
   const [weightInput, setWeightInput] = useState('1')
   const [isFollowing, setIsFollowing] = useState(false)
   const [followFormError, setFollowFormError] = useState({ fieldErrors: {}, generalMessage: null })
+
+  // Which dialog is open, if any: the keyword being edited or being removed.
+  // The remove dialog has its own open flag, so the keyword's name stays
+  // visible while the dialog fades out after it closes.
+  const [keywordBeingEdited, setKeywordBeingEdited] = useState(null)
+  const [keywordBeingRemoved, setKeywordBeingRemoved] = useState(null)
+  const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false)
+  const [isRemoving, setIsRemoving] = useState(false)
+  const [removeErrorMessage, setRemoveErrorMessage] = useState(null)
 
   useEffect(() => {
     // Cancels the request if the page changes or the component unmounts,
@@ -169,6 +278,33 @@ function KeywordsManager() {
     }
   }
 
+  // A renamed keyword can move to another place in the alphabetical list,
+  // so the page is fetched again instead of patching one row.
+  function handleEditSaved() {
+    setKeywordBeingEdited(null)
+    setReloadCount((previousCount) => previousCount + 1)
+  }
+
+  async function handleRemoveConfirm() {
+    setIsRemoving(true)
+    setRemoveErrorMessage(null)
+    const wasLastOnPage = requestResult.keywordsPage.results.length === 1
+    try {
+      await deleteKeyword(keywordBeingRemoved.id)
+      if (wasLastOnPage && currentPage > 1) {
+        // This page is now empty, so step back one page instead of showing a 404.
+        handlePageChange(null, currentPage - 1)
+      } else {
+        setReloadCount((previousCount) => previousCount + 1)
+      }
+    } catch {
+      setRemoveErrorMessage(`Could not stop following "${keywordBeingRemoved.keyword}". Please try again.`)
+    } finally {
+      setIsRemoveDialogOpen(false)
+      setIsRemoving(false)
+    }
+  }
+
   let listContent
   if (isLoading) {
     listContent = (
@@ -196,7 +332,24 @@ function KeywordsManager() {
                 {itemIndex > 0 && <Divider component="li" />}
                 <ListItem>
                   <ListItemText primary={keywordItem.keyword} />
-                  <Chip label={`weight ${keywordItem.weight}`} size="small" />
+                  <Chip label={`weight ${keywordItem.weight}`} size="small" sx={{ marginRight: 1 }} />
+                  {/* Icon-only buttons, so each label names the keyword for screen readers */}
+                  <IconButton
+                    aria-label={`Edit ${keywordItem.keyword}`}
+                    onClick={() => setKeywordBeingEdited(keywordItem)}
+                  >
+                    <EditOutlinedIcon />
+                  </IconButton>
+                  <IconButton
+                    aria-label={`Stop following ${keywordItem.keyword}`}
+                    color="error"
+                    onClick={() => {
+                      setKeywordBeingRemoved(keywordItem)
+                      setIsRemoveDialogOpen(true)
+                    }}
+                  >
+                    <DeleteOutlinedIcon />
+                  </IconButton>
                 </ListItem>
               </Fragment>
             ))}
@@ -257,7 +410,42 @@ function KeywordsManager() {
         </Stack>
       </Stack>
 
+      {removeErrorMessage && (
+        <Alert severity="error" onClose={() => setRemoveErrorMessage(null)}>
+          {removeErrorMessage}
+        </Alert>
+      )}
+
       {listContent}
+
+      {keywordBeingEdited && (
+        <KeywordEditDialog
+          keywordItem={keywordBeingEdited}
+          onCancel={() => setKeywordBeingEdited(null)}
+          onSaved={handleEditSaved}
+        />
+      )}
+
+      {/* Confirm step before a delete, since it can't be undone from the UI */}
+      <Dialog
+        open={isRemoveDialogOpen}
+        onClose={isRemoving ? undefined : () => setIsRemoveDialogOpen(false)}
+      >
+        <DialogTitle>Stop following this keyword?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            "{keywordBeingRemoved?.keyword}" will be removed from your keywords.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsRemoveDialogOpen(false)} disabled={isRemoving}>
+            Cancel
+          </Button>
+          <Button color="error" variant="contained" onClick={handleRemoveConfirm} disabled={isRemoving}>
+            {isRemoving ? 'Removing…' : 'Stop following'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   )
 }
