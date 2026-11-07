@@ -9,10 +9,22 @@ import os
 import sys
 
 from .api_client import ApiClient, normalize_api_url
+from .article_commands import handle_feed, handle_open, handle_show
 from .errors import DevfeedError, SessionEndedError
 from .session_store import SessionStore
 
 DEFAULT_API_URL = "127.0.0.1:8000"
+
+
+def positive_integer(raw_value):
+    """argparse type for ids and page numbers: whole numbers from 1 up."""
+    try:
+        parsed_value = int(raw_value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{raw_value!r} is not a whole number")
+    if parsed_value < 1:
+        raise argparse.ArgumentTypeError(f"{raw_value!r} must be 1 or more")
+    return parsed_value
 
 
 def handle_login(api_client, arguments):
@@ -84,6 +96,19 @@ def build_argument_parser():
 
     whoami_parser = subcommand_parsers.add_parser("whoami", help="show who is logged in")
     whoami_parser.set_defaults(handler=handle_whoami)
+
+    feed_parser = subcommand_parsers.add_parser("feed", help="list articles, newest first")
+    feed_parser.add_argument("--page", type=positive_integer, default=1, help="page number (default 1)")
+    feed_parser.set_defaults(handler=handle_feed)
+
+    show_parser = subcommand_parsers.add_parser("show", help="show one article")
+    show_parser.add_argument("article_id", type=positive_integer, help="article id from the feed")
+    show_parser.add_argument("--open", action="store_true", help="also open the link in the browser")
+    show_parser.set_defaults(handler=handle_show)
+
+    open_parser = subcommand_parsers.add_parser("open", help="open an article's link in the browser")
+    open_parser.add_argument("article_id", type=positive_integer, help="article id from the feed")
+    open_parser.set_defaults(handler=handle_open)
 
     return argument_parser
 
