@@ -19,6 +19,7 @@ from .keyword_commands import (
 )
 from .session_store import SessionStore
 from .vote_commands import handle_unvote, handle_vote
+from .web_commands import handle_web
 
 DEFAULT_API_URL = "127.0.0.1:8000"
 
@@ -161,6 +162,14 @@ def build_argument_parser():
     unvote_parser.add_argument("article_id", type=positive_integer, help="article id from the feed")
     unvote_parser.add_argument("--yes", action="store_true", help="remove your vote without asking first")
     unvote_parser.set_defaults(handler=handle_unvote)
+
+    web_parser = subcommand_parsers.add_parser("web", help="open a web app page in the browser")
+    web_parser.add_argument(
+        "page", nargs="?", choices=["feed", "saved", "keywords"], default="feed",
+        help="page to open (default feed)",
+    )
+    web_parser.add_argument("--web-url", help="web app address (default: matches --api-url)")
+    web_parser.set_defaults(handler=handle_web)
 
     return argument_parser
 
