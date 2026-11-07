@@ -10,6 +10,7 @@ import sys
 
 from .api_client import ApiClient, normalize_api_url
 from .article_commands import handle_feed, handle_open, handle_show
+from .bookmark_commands import handle_note, handle_save, handle_saved, handle_unsave
 from .errors import DevfeedError, SessionEndedError
 from .session_store import SessionStore
 
@@ -109,6 +110,25 @@ def build_argument_parser():
     open_parser = subcommand_parsers.add_parser("open", help="open an article's link in the browser")
     open_parser.add_argument("article_id", type=positive_integer, help="article id from the feed")
     open_parser.set_defaults(handler=handle_open)
+
+    save_parser = subcommand_parsers.add_parser("save", help="save an article as a bookmark")
+    save_parser.add_argument("article_id", type=positive_integer, help="article id from the feed")
+    save_parser.add_argument("--note", default="", help="note to keep with the bookmark")
+    save_parser.set_defaults(handler=handle_save)
+
+    saved_parser = subcommand_parsers.add_parser("saved", help="list your bookmarks, newest first")
+    saved_parser.add_argument("--page", type=positive_integer, default=1, help="page number (default 1)")
+    saved_parser.set_defaults(handler=handle_saved)
+
+    note_parser = subcommand_parsers.add_parser("note", help="replace a bookmark's note")
+    note_parser.add_argument("bookmark_id", type=positive_integer, help="bookmark id from saved")
+    note_parser.add_argument("note_text", help='new note; "" clears it')
+    note_parser.set_defaults(handler=handle_note)
+
+    unsave_parser = subcommand_parsers.add_parser("unsave", help="remove a bookmark")
+    unsave_parser.add_argument("bookmark_id", type=positive_integer, help="bookmark id from saved")
+    unsave_parser.add_argument("--yes", action="store_true", help="remove without asking first")
+    unsave_parser.set_defaults(handler=handle_unsave)
 
     return argument_parser
 
