@@ -2,7 +2,7 @@
 
 My repeatable order for building and testing a full-stack app: build from the data outward, and don't move to the next layer until the current one is verified, not just written. Deploy early: a working skeleton on the real server beats a finished app that only runs on my laptop.
 
-## DevFeed status (as of Nov 5, 2026)
+## DevFeed status (as of Nov 7, 2026)
 
 1. Steps 1–3: done and verified on real Postgres. Both required third-party APIs are integrated as management commands (`ingest_hacker_news`, `ingest_github`), each verified idempotent.
 2. Step 4: done. CRUD API for sources, tags and articles, with PUT mutation, PUT/DELETE idempotency, nested tag updates and input validation covered by tests. `DEBUG` now comes from `.env` and defaults to False (PR #38), so production returns Django's generic 500 page instead of a traceback.
@@ -15,10 +15,13 @@ My repeatable order for building and testing a full-stack app: build from the da
 9. Step 10: items 1–4 and 7 done (PR #46, issue #45). Vite + React + Material UI app in `frontend/` with one theme (light and dark palettes), React Router with an app bar, and the paginated article feed against the real API, checked against `psql`. Items 5–6 done (PR #52, issue #51): sign-up (with password confirmation), log-in and log-out pages; the token is stored in `localStorage` and sent on every request; one app-wide rule turns a rejected token into a log-in page notice; the session is shared through an auth Context. Checked against `psql` for both an existing and a new user. Article links are limited to `http`/`https` URLs (PR #50, issue #49). Issue #10 stays open for the Step 12 features.
 10. Step 11: done (Nov 3, 2026). First deploy live at `http://44.248.236.123` on one `t3.small` EC2 instance (`i-0a22ed6f7e3e77266`, us-west-2) running the same Docker Compose stack, with a $10 monthly budget alert. The frontend's host port comes from `FRONTEND_HOST_BINDING` (PR #60, issue #59), so the server publishes port 80 and my Mac keeps `127.0.0.1:8080`. No HTTPS yet. Terminate the instance after the presentation unless I keep it running on purpose.
 11. Step 12: full CRUD in the UI on both user-owned resources is done, which completes the MVP's two-model CRUD requirement. Bookmarks in PR #64 (issue #63): a Save button with an optional note on each feed card, and a Saved page with a read checkbox, note editing and remove. Keywords in PR #66 (issue #65): a Keywords page with a Follow form, an alphabetical list, an edit dialog and stop following. Every operation was checked in the browser against `psql` locally and again on the live site after each redeploy. The redeploy is a script I copy to the server and run with the expected commit (`redeploy_devfeed_server.sh`, not in the repo yet). Issue #10 stays open for the voting UI and the autocomplete search bar.
-12. Next: the README (Step 15), the last required MVP item. Then voting and autocomplete if time allows. Steps 13–17 not started. Presentation Week 24 Day 4.
-13. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories (one showed on page 1 of the feed while testing PR #46); decide on filtering before the presentation.
-14. Known issue: the article list orders by `-published_at` with no tie-breaker, and one timestamp is shared locally, so equal-time articles could shift between pages. Add `-id` to the ordering, with a test, in a small backend issue.
-15. Known issue: the JS bundle is about 560 kB after the bookmark and keyword pages, and Vite warns about chunks over 500 kB. Splitting pages into separate chunks can fix it later; the build still succeeds.
+12. Step 15: README done (PR #70, issue #69) with screenshots, live link, setup steps, tech list and ERD; the local-development steps were run from a fresh clone. Every course-required MVP item is now on `main` and live.
+13. CLI client done (PR #72, issue #71), stretch goal 1 in the proposal: `devfeed` with `login`/`logout`/`whoami`, `feed`, `show`, `open`, `save`/`saved`/`note`/`unsave`, `keywords` (`follow`/`unfollow`), `vote`/`unvote` and `web`. New files only, all in `cli/`: no backend, frontend, server or `requirements.txt` changes, and no redeploy. Scope changes from the design doc, my decisions: `feed --tag`/`--source` dropped (the API has no such filters), `unvote` sends `{"direction": null}` instead of DELETE, and bookmarks, keywords and `web` added; `unsave`, `keywords unfollow` and `unvote` ask before acting. 86 unit tests with the API mocked, each commit proven with a deliberate break; every command checked against `psql` locally and against the server's `psql` on the live site, plus a cross-client check (CLI to web and back) on the live site.
+14. Decision (Nov 7): five approved-proposal MVP features aren't in the web app, and I'm presenting them as the next phase instead of adding them before the demo, so the working web app isn't disturbed: the GitHub Trending banner and "My feed" first, then the voting UI (voting already works in the CLI), the article detail page, and tag filtering with autocomplete (needs backend work: a tag filter on the article list and tags assigned during ingestion). The README lists them under "Next phase".
+15. Next: rehearse the demo (log in with the CLI, save and follow, `devfeed web saved`, finish in the web app), run a fresh ingestion on the server the day before, record a backup demo, and prepare the 5–10 minute talk. Steps 13, 14, 16 and 17 not started. Presentation Saturday, Nov 14, 2026.
+16. Open question: GitHub results are unfiltered and can include off-topic or NSFW repositories (one showed on page 1 of the feed while testing PR #46); decide on filtering before the presentation.
+17. Known issue: the article list orders by `-published_at` with no tie-breaker, and one timestamp is shared locally, so equal-time articles could shift between pages. Add `-id` to the ordering, with a test, in a small backend issue.
+18. Known issue: the JS bundle is about 560 kB after the bookmark and keyword pages, and Vite warns about chunks over 500 kB. Splitting pages into separate chunks can fix it later; the build still succeeds.
 
 ## 1. Proposal & ERD
 
@@ -138,8 +141,8 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 ## 12. React Feature Completion
 
 1. **Done:** Build out full CRUD in the UI for each user-owned resource (list, create, edit, delete) (bookmarks in PR #64: Save with a note from each feed card, then list, edit the note, mark read and remove on `/saved`; keywords in PR #66: follow, list, edit and stop following on `/keywords`; duplicates show a clear message instead of DRF's unique-set error)
-2. **To do:** Build the autocomplete search bar (debounced input, calls the endpoint from step 6)
-3. **To do:** Build the voting UI (thumbs up/down, reflects the current vote per article)
+2. **To do:** Build the autocomplete search bar (debounced input, calls the endpoint from step 6) (next phase, after the presentation; also needs a tag filter on the article list and tags assigned during ingestion)
+3. **To do:** Build the voting UI (thumbs up/down, reflects the current vote per article) (next phase, after the presentation; voting already works in the CLI, PR #72)
 4. **Done:** Manually click through every CRUD operation in the browser (bookmarks and keywords, on my Mac and on the live site)
 5. **Done:** After each action, re-check the database directly to confirm nothing silently failed (`articles_bookmark` and `user_profiles_userkeyword` in `psql`, locally and on the server; the commit commands also checked the final rows before committing)
 6. **Partial:** Redeploy after each feature lands, not all at the end (done after PR #64 and PR #66 with a redeploy script that pulls `main`, checks the expected commit, rebuilds, and reports container states, unapplied migrations and the served bundle; voting and autocomplete still to come)
@@ -164,8 +167,8 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 
 ## 15. Documentation & Presentation
 
-1. **To do:** README: what the app does and the problem it solves, screenshots or a demo GIF, live link, setup steps someone can follow from `git clone`, technologies used, ERD
-2. **To do:** Confirm the setup steps work from a fresh clone
+1. **Done:** README: what the app does and the problem it solves, screenshots or a demo GIF, live link, setup steps someone can follow from `git clone`, technologies used, ERD (PR #70, with three screenshots from the live site; a CLI section and the next-phase list added after PR #72)
+2. **Done:** Confirm the setup steps work from a fresh clone (Nov 5: venv, `pip install`, `migrate` on Postgres 16, `runserver`, `npm ci`, Vite and a sign-up returning 201, all from a fresh clone; `pip install -e cli` and the CLI tests checked from a fresh clone on Nov 7)
 3. **To do:** Record a backup demo walkthrough before presentation day
 4. **To do:** Prepare the 5–10 minute presentation: what it does, live demo, tech stack, hardest problem debugged, what I'd do with another week
 5. **To do:** Add the project to my LinkedIn and GitHub profile README once it's deployed
@@ -191,7 +194,7 @@ Auth comes before feature endpoints because user-owned resources (votes, keyword
 
 ## Optional Next Steps (once the above is solid)
 
-- **Second client (CLI):** a thin command-line client against the same API. Build it after the web MVP is deployed, then do a cross-client regression pass: change data in one client, confirm it shows in the other, and repeat in the opposite direction.
+- **Done: Second client (CLI):** a thin command-line client against the same API. Build it after the web MVP is deployed, then do a cross-client regression pass: change data in one client, confirm it shows in the other, and repeat in the opposite direction. (PR #72: built after the deploy; the cross-client pass ran on the live site, CLI to web and web to CLI.)
 - **Raw HTML/CSS/JS checkpoint:** a single plain page with `fetch()` calls, as proof the API works from a browser with no framework. Useful for learning; skipped when the hour budget is tight.
 - **GraphQL:** a single endpoint where the client asks for exactly the fields it wants, instead of many fixed-shape REST endpoints. Worth exploring as a stretch add-on once REST is solid.
 - **AI/LLM integration:** embeddings/vector search, RAG (retrieval-augmented generation), and AI API integration into a Django backend, including using vote data to train a preference/re-ranking model instead of simple score-based filtering. A separate skill track from core full-stack CRUD, worth its own pass once the base app is deployed and stable.
