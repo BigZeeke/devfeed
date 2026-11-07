@@ -1,6 +1,6 @@
 # DevFeed
 
-One feed for developer news. DevFeed pulls stories from the Hacker News and GitHub APIs into one PostgreSQL database, and a React + Material UI web app reads them through a Django REST Framework API. I can save articles with notes and follow the keywords I care about.
+One feed for developer news. DevFeed pulls stories from the Hacker News and GitHub APIs into one PostgreSQL database, and a React + Material UI web app reads them through a Django REST Framework API. I can save articles with notes and follow the keywords I care about, from the web app or from the `devfeed` command-line client, which uses the same API.
 
 I built DevFeed as my Module 9 personal project for Code Platoon (Cohort Juliett).
 
@@ -28,14 +28,16 @@ Keywords: follow a keyword with a weight, then edit or stop following it.
 4. Followed keywords, with full CRUD from the UI: follow a keyword with a weight, list them alphabetically, edit the text or weight, and stop following.
 5. Each user sees and changes only their own bookmarks and keywords; another user's row returns 404.
 6. Light and dark themes that follow the browser's color-scheme setting.
+7. A command-line client, `devfeed`, for the feed, bookmarks, keywords and article voting, plus a command that opens the matching web page (see [Command-line client](#command-line-client)).
 
-Built in the API, not in the UI yet: article voting (`POST /api/articles/<id>/vote/`) and tag autocomplete (`GET /api/search/autocomplete/`).
+Article voting is in the API and the CLI, not in the web UI yet. Tag autocomplete (`GET /api/search/autocomplete/`) is built in the API only. Both are part of the [next phase](#next-phase).
 
 ## Tech stack
 
 | Layer | Technology |
 | --- | --- |
 | Frontend | React 19, Vite 8, Material UI 9, React Router 8 (JavaScript) |
+| Command-line client | Python 3.14 with `argparse` and `requests` (no extra dependencies) |
 | Backend | Python 3.14, Django 6.1, Django REST Framework, django-cors-headers, Gunicorn |
 | Database | PostgreSQL 18 (Docker) |
 | Third-party APIs | Hacker News Algolia API, GitHub Search API |
@@ -143,6 +145,60 @@ python manage.py test
 
 In Docker: `docker compose exec backend python manage.py test`. The frontend has a linter (`npm run lint` in `frontend/`) but no automated tests yet.
 
+The command-line client has 86 unit tests that mock the API, so they run without a server. From the repo root, after installing the CLI (next section):
+
+```zsh
+python -m unittest discover -s cli/tests
+```
+
+## Command-line client
+
+`devfeed` is a thin client over the same REST API as the web app. It lives in `cli/` and needs nothing beyond the backend's requirements.
+
+### Install
+
+From the repo root, with the virtual environment from Option 2 active:
+
+```zsh
+pip install -e cli
+devfeed --help
+```
+
+### Choosing a server
+
+Every command talks to `127.0.0.1:8000` (local `runserver`) unless told otherwise:
+
+1. `--api-url <address>` on any command, for example `devfeed --api-url 127.0.0.1:8080 feed` for the Docker stack.
+2. `DEVFEED_API_URL` in the environment, used when `--api-url` isn't given.
+
+Log-ins are stored per server in `~/.config/devfeed/sessions.json` (readable only by me), so I can be logged in locally and on the live site at the same time. Tokens are never printed.
+
+### Commands
+
+| Command | What it does |
+| --- | --- |
+| `devfeed login` / `logout` / `whoami` | Log in (asks for username and password), log out, or show who is logged in on this server |
+| `devfeed feed [--page N]` | List articles, newest first, 20 per page |
+| `devfeed show <article-id> [--open]` | Show one article's details; `--open` also opens its link |
+| `devfeed open <article-id>` | Open an article's link in the browser |
+| `devfeed save <article-id> [--note TEXT]` | Save an article as a bookmark |
+| `devfeed saved [--page N]` | List my bookmarks with their bookmark ids, read flag and note |
+| `devfeed note <bookmark-id> TEXT` | Replace a bookmark's note (`""` clears it) |
+| `devfeed unsave <bookmark-id> [--yes]` | Remove a bookmark |
+| `devfeed keywords` | List my followed keywords and weights |
+| `devfeed keywords follow <word> [--weight N]` | Follow a keyword (weight defaults to 1) |
+| `devfeed keywords unfollow <word> [--yes]` | Stop following a keyword |
+| `devfeed vote <article-id> up\|down` | Vote on an article; voting again switches the vote |
+| `devfeed unvote <article-id> [--yes]` | Take back my vote |
+| `devfeed web [feed\|saved\|keywords] [--web-url URL]` | Open the matching web app page |
+
+Notes:
+
+1. Saving uses the article id from `feed`; `note` and `unsave` use the bookmark id from `saved`.
+2. `unsave`, `keywords unfollow` and `unvote` ask `[y/N]` first; only `y` or `yes` goes ahead, and `--yes` skips the question.
+3. `devfeed web` opens `localhost:5173` for local `runserver`, and the API's own address otherwise (the live site and the Docker stack serve the web app and the API together). The browser keeps its own log-in, so it's logged in separately.
+4. Exit codes: 0 on success, 1 on an error (with a one-line message), 2 for a mistyped command.
+
 ## API overview
 
 All endpoints are under `/api/`. Authenticated requests send `Authorization: Token <key>`. List responses are paginated, 20 per page: `{count, next, previous, results}`.
@@ -156,6 +212,16 @@ All endpoints are under `/api/`. Authenticated requests send `Authorization: Tok
 | `/api/articles/<id>/vote/` | POST `{"direction": "up" \| "down" \| null}` | Logged-in users |
 | `/api/search/autocomplete/?field=tag&query=<text>` | GET | Anyone |
 
+## Next phase
+
+These five features are in my approved proposal's MVP but not in the web app yet. I chose not to add them before the presentation, because the web app is fully working and I didn't want to disturb it; they're the planned next phase, in this order:
+
+1. **GitHub Trending banner** on the home page. GitHub repositories are already ingested with the source "GitHub"; this is mostly UI.
+2. **"My feed"**, a feed driven by the keywords I follow. Needs a new backend filter and a page.
+3. **Voting UI**: thumbs up and down on each article, with switching and taking a vote back. The endpoint is built and tested, and the CLI already uses it; this is UI only.
+4. **Article detail page**. Mostly UI; the article endpoint already returns one article.
+5. **Tag filtering with autocomplete**: type `dja`, pick `django`, and filter the feed. The autocomplete endpoint is built and tested, but the article list has no tag filter yet and ingestion doesn't assign tags, so this needs backend work.
+
 ## Known limitations
 
 1. The live site runs on plain HTTP at a bare IP address, so passwords and tokens travel unencrypted. HTTPS with a domain is planned.
@@ -164,6 +230,7 @@ All endpoints are under `/api/`. Authenticated requests send `Authorization: Tok
 4. Keywords and votes don't filter or rank the feed yet.
 5. Ingestion runs by hand with the management commands; there's no schedule yet.
 6. The Django admin loads without its CSS under Gunicorn (static files aren't collected yet).
+7. The web app and the CLI share one log-in token per user, so `devfeed logout` also logs the browser out when both use the same account.
 
 ## Project documents
 
