@@ -1,0 +1,3 @@
+# Build metadata that "pip install -e cli" writes next to the package
+*.egg-info/
+build/
