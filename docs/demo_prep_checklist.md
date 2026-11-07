@@ -24,12 +24,15 @@ Commands run in the terminal from the repo root (prompt `devfeed on  main`) with
 
    Expected: three rows (`backend`, `db`, `frontend`), each with a STATUS starting `Up`.
 
-### 2. Decide on GitHub filtering
+### 2. GitHub filtering (decided: no code changes before the presentation)
 
-GitHub results are unfiltered, so an off-topic repository can appear in the feed (open question in the build checklist).
+GitHub results are unfiltered, so an off-topic repository can appear in the feed. Decision (Nov 7): no code changes before the presentation. Instead:
 
-1. Without filtering: after the fresh ingestion (step 3), look through page 1 of the feed and pick the demo article from rows that are clearly on-topic.
-2. With filtering: that's a code change with its own issue, PR and redeploy. It has to land before step 3, and it changes the working app, so it needs time to verify.
+1. Narrow the fresh GitHub ingestion with the existing `--language` option (step 3).
+2. Review page 1 after the ingestion and again on the morning of the presentation.
+3. Remove any off-topic article as a data change on the server (step 3, item 7).
+
+Real filtering stays on the list for after the presentation.
 
 ### 3. Refresh the articles on the live server
 
@@ -47,10 +50,10 @@ This writes new articles to the live database. Existing articles, bookmarks, key
    ssh -i ~/.ssh/devfeed_ec2 ubuntu@44.248.236.123 'cd ~/devfeed && docker compose exec -T backend python manage.py ingest_hacker_news'
    ```
 
-3. Load the newest GitHub repositories (10 by default):
+3. Load the newest Python repositories from GitHub (10 by default). `--language python` limits the search to Python projects; another language name works the same way:
 
    ```zsh
-   ssh -i ~/.ssh/devfeed_ec2 ubuntu@44.248.236.123 'cd ~/devfeed && docker compose exec -T backend python manage.py ingest_github'
+   ssh -i ~/.ssh/devfeed_ec2 ubuntu@44.248.236.123 'cd ~/devfeed && docker compose exec -T backend python manage.py ingest_github --language python'
    ```
 
 4. Count the articles again with the command from item 1. The new count is the old count plus the new stories (stories already in the database are skipped).
@@ -59,6 +62,24 @@ This writes new articles to the live database. Existing articles, bookmarks, key
    ```zsh
    devfeed --api-url 44.248.236.123 feed | head -6; devfeed --api-url 44.248.236.123 feed | tail -1
    ```
+
+6. Review all of page 1 (`devfeed --api-url 44.248.236.123 feed`). Every title should be clearly on-topic for a developer audience.
+7. Only if an article must go, remove it on the server. Read this first: deleting an article can't be undone through the app, and it also deletes every bookmark and vote on that article. A later ingestion can add it back if it's still in the search results.
+   1. Show the article first (replace `<id>` with its id from the feed). Expected: `<QuerySet [(<id>, '<title>')]>`:
+
+      ```zsh
+      ssh -i ~/.ssh/devfeed_ec2 ubuntu@44.248.236.123 'cd ~/devfeed && docker compose exec -T backend python manage.py shell -c "from articles.models import Article; print(Article.objects.filter(id=<id>).values_list(\"id\", \"title\"))"'
+      ```
+
+   2. If the printed title is the one to remove, delete it:
+
+      ```zsh
+      ssh -i ~/.ssh/devfeed_ec2 ubuntu@44.248.236.123 'cd ~/devfeed && docker compose exec -T backend python manage.py shell -c "from articles.models import Article; print(Article.objects.filter(id=<id>).delete())"'
+      ```
+
+      Expected: a line like `(2, {'articles.Bookmark': 1, 'articles.Article': 1})`, with `'articles.Article': 1` in it; the first number also counts the bookmarks and votes deleted with the article. Django may print an `objects imported automatically` line first.
+
+   3. Rerun item 5; the footer count is one lower.
 
 ### 4. Choose the demo article
 
@@ -134,9 +155,10 @@ A recording covers a network or server failure during the presentation.
 
 ### 9. Final checks
 
-1. Turn on Do Not Disturb so notifications don't appear on screen.
-2. Keep the backup recording open in a paused player, in case the network fails.
-3. Keep the chosen article id visible on paper or a second screen.
+1. Review page 1 once more (`devfeed feed`). If anything off-topic appeared since the day before, remove it as in step 3, item 7, or simply don't scroll to it.
+2. Turn on Do Not Disturb so notifications don't appear on screen.
+3. Keep the backup recording open in a paused player, in case the network fails.
+4. Keep the chosen article id visible on paper or a second screen.
 
 ## During the demo
 
