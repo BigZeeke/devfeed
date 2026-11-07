@@ -1,0 +1,22 @@
+# Packaging for the DevFeed command-line client.
+# Install into the repo-root venv with: pip install -e cli
+# This installs the "devfeed" command; requests is already in that venv.
+
+[build-system]
+requires = ["setuptools>=64"]  # 64+ supports pip install -e with only pyproject.toml (PEP 660)
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devfeed-cli"
+version = "0.1.0"
+description = "Command-line client for the DevFeed REST API"
+requires-python = ">=3.13"
+dependencies = ["requests"]
+
+[project.scripts]
+# "devfeed" runs main() in devfeed_cli/main.py
+devfeed = "devfeed_cli.main:main"
+
+[tool.setuptools]
+# List the package explicitly so tests/ is never installed as a package
+packages = ["devfeed_cli"]
