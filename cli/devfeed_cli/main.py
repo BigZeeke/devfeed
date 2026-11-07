@@ -12,6 +12,11 @@ from .api_client import ApiClient, normalize_api_url
 from .article_commands import handle_feed, handle_open, handle_show
 from .bookmark_commands import handle_note, handle_save, handle_saved, handle_unsave
 from .errors import DevfeedError, SessionEndedError
+from .keyword_commands import (
+    handle_keywords_command,
+    handle_keywords_follow,
+    handle_keywords_unfollow,
+)
 from .session_store import SessionStore
 
 DEFAULT_API_URL = "127.0.0.1:8000"
@@ -129,6 +134,22 @@ def build_argument_parser():
     unsave_parser.add_argument("bookmark_id", type=positive_integer, help="bookmark id from saved")
     unsave_parser.add_argument("--yes", action="store_true", help="remove without asking first")
     unsave_parser.set_defaults(handler=handle_unsave)
+
+    keywords_parser = subcommand_parsers.add_parser(
+        "keywords", help="list followed keywords, or follow / unfollow one"
+    )
+    keywords_parser.set_defaults(handler=handle_keywords_command)
+    keywords_subcommand_parsers = keywords_parser.add_subparsers(dest="keywords_action")
+
+    follow_parser = keywords_subcommand_parsers.add_parser("follow", help="follow a keyword")
+    follow_parser.add_argument("keyword", help="word to follow (stored lowercase)")
+    follow_parser.add_argument("--weight", type=int, help="whole number; the API's default is 1")
+    follow_parser.set_defaults(keywords_handler=handle_keywords_follow)
+
+    unfollow_parser = keywords_subcommand_parsers.add_parser("unfollow", help="stop following a keyword")
+    unfollow_parser.add_argument("keyword", help="followed word (any case)")
+    unfollow_parser.add_argument("--yes", action="store_true", help="stop following without asking first")
+    unfollow_parser.set_defaults(keywords_handler=handle_keywords_unfollow)
 
     return argument_parser
 
