@@ -18,6 +18,7 @@ from .keyword_commands import (
     handle_keywords_unfollow,
 )
 from .session_store import SessionStore
+from .vote_commands import handle_unvote, handle_vote
 
 DEFAULT_API_URL = "127.0.0.1:8000"
 
@@ -150,6 +151,16 @@ def build_argument_parser():
     unfollow_parser.add_argument("keyword", help="followed word (any case)")
     unfollow_parser.add_argument("--yes", action="store_true", help="stop following without asking first")
     unfollow_parser.set_defaults(keywords_handler=handle_keywords_unfollow)
+
+    vote_parser = subcommand_parsers.add_parser("vote", help="vote an article up or down")
+    vote_parser.add_argument("article_id", type=positive_integer, help="article id from the feed")
+    vote_parser.add_argument("direction", choices=["up", "down"], help="up or down")
+    vote_parser.set_defaults(handler=handle_vote)
+
+    unvote_parser = subcommand_parsers.add_parser("unvote", help="take back your vote on an article")
+    unvote_parser.add_argument("article_id", type=positive_integer, help="article id from the feed")
+    unvote_parser.add_argument("--yes", action="store_true", help="remove your vote without asking first")
+    unvote_parser.set_defaults(handler=handle_unvote)
 
     return argument_parser
 
